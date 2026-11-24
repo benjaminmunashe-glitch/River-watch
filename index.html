@@ -548,18 +548,53 @@ async function loadSheet(){
   return { rows, fetchedAt: new Date().toISOString() };
 }
 
+// Forecast routes: Open-Meteo direct, then Open-Meteo via the River Watch server (a different internet address,
+// so one connection's daily limit does not stop the page), then the last good forecast saved in this browser.
+// A forecast less than FORECAST_REUSE_MIN minutes old is reused (Open-Meteo updates these forecasts about once a day).
+const FORECAST_CACHE = "riverwatch_forecast_cache";
+const FORECAST_REUSE_MIN = 15;
+const FORECAST_MAX_STALE_H = 36;
 async function loadForecast(history){
   const t = history.towns;
-  const url = `${FLOOD_API}?latitude=${t.map(x=>x.lat_used).join(",")}&longitude=${t.map(x=>x.lon_used).join(",")}`+
-              `&daily=river_discharge&forecast_days=3&timezone=Europe%2FDublin`;
-  const data = await getJSON(url, "River forecast");
-  const arr = Array.isArray(data) ? data : [data];
-  const byTown = {};
-  t.forEach((x,i)=>{
-    const d = arr[i].daily;
-    byTown[x.town] = { dates: d.time, values: d.river_discharge, lat: arr[i].latitude, lon: arr[i].longitude };
-  });
-  return { byTown, url, fetchedAt: new Date().toISOString() };
+  const qs = `?latitude=${t.map(x=>x.lat_used).join(",")}&longitude=${t.map(x=>x.lon_used).join(",")}`+
+             `&daily=river_discharge&forecast_days=3&timezone=Europe%2FDublin`;
+  const url = FLOOD_API + qs;
+  const today = new Date().toLocaleDateString("en-CA", {timeZone:"Europe/Dublin"});
+  const build = (data, dropPast) => {
+    const arr = Array.isArray(data) ? data : [data];
+    const byTown = {};
+    t.forEach((x,i)=>{
+      const d = arr[i] && arr[i].daily;
+      if(!d) throw new Error("River forecast: unexpected response");
+      let dates = d.time, values = d.river_discharge;
+      if(dropPast){ const keep = dates.map(x=>x>=today); dates = dates.filter((_,j)=>keep[j]); values = values.filter((_,j)=>keep[j]); }
+      byTown[x.town] = { dates, values, lat: arr[i].latitude, lon: arr[i].longitude };
+    });
+    return byTown;
+  };
+  let cached = null;
+  try{ cached = JSON.parse(localStorage.getItem(FORECAST_CACHE)); if(!cached || cached.qs!==qs) cached = null; }catch(e){ cached = null; }
+  const ageMin = cached ? (Date.now() - new Date(cached.fetchedAt).getTime())/60000 : Infinity;
+  if(cached && ageMin < FORECAST_REUSE_MIN && cached.day===today)
+    return { byTown: build(cached.data), url, fetchedAt: cached.fetchedAt, via: cached.via, reused: true };
+
+  const routes = [[url, "Open-Meteo Flood API (direct)"], [WORKER_URL.replace(/\/$/,"") + "/flood" + qs, "Open-Meteo Flood API via River Watch server"]];
+  const errors = [];
+  for(const [u, via] of routes){
+    try{
+      const data = await getJSON(u, "River forecast");
+      const byTown = build(data);
+      const fetchedAt = new Date().toISOString();
+      try{ localStorage.setItem(FORECAST_CACHE, JSON.stringify({qs, data, fetchedAt, via, day: today})); }catch(e){}
+      return { byTown, url, fetchedAt, via, fallbackUsed: errors.length ? errors.join("; ") : null };
+    }catch(e){ errors.push(`${via}: ${e.message.replace(/^River forecast: /,"")}`); }
+  }
+  if(cached && ageMin < FORECAST_MAX_STALE_H*60){
+    const byTown = build(cached.data, true);
+    if(Object.values(byTown).every(x=>x.values.length))
+      return { byTown, url, fetchedAt: cached.fetchedAt, via: cached.via + " (CACHED copy)", stale: true, staleReason: errors.join("; ") };
+  }
+  throw new Error("River forecast unavailable: " + errors.join("; "));
 }
 
 function levelFromWarning(w, text){
@@ -916,6 +951,8 @@ function renderPlan(live, plan){
     <div class="stat Standby"><span class="n">${n("Standby")}</span><span class="l">${LVL_ICON.Standby.replace("<svg","<svg width='11' height='11' style='color:var(--standby)'")}Standby</span></div>
     <div class="stat Normal"><span class="n">${n("Normal")}</span><span class="l">${LVL_ICON.Normal.replace("<svg","<svg width='11' height='11' style='color:var(--normal)'")}Normal</span></div></div>`;
   if(plan.usesRehearsal) h += `<div class="banner rehearsal">⚠️ <span><b>Rehearsal values in use.</b> Values from the Sheet's override columns replace live data where marked “Rehearsal”.</span></div>`;
+  if(live.forecast.stale) h += `<div class="banner error">⚠️ <span><b>Live river forecast unavailable: using the last saved forecast from ${esc(new Date(live.forecast.fetchedAt).toLocaleString())}.</b> Past days are dropped. Check again before deciding. (${esc(live.forecast.staleReason)})</span></div>`;
+  else if(live.forecast.fallbackUsed) h += `<div class="banner info">ℹ️ <span>Direct forecast request failed, so the forecast was read through the River Watch server (same Open-Meteo data).</span></div>`;
   if(live.warnings.error) h += `<div class="banner error">⚠️ <span><b>Met Éireann warnings could not be read</b> (${esc(live.warnings.error)}). Check warnings manually.</span></div>`;
   if(plan.missing.length) h += `<div class="banner error">⚠️ <span>No history or forecast for: ${esc(plan.missing.join(", "))}. These towns cannot be assessed.</span></div>`;
   const order = {Barriers:0, Standby:1, Normal:2, Unknown:3};
@@ -932,7 +969,7 @@ function renderPlan(live, plan){
   }
   h += `</div>`;
   if(plan.flags.length) h += `<div class="card flags"><h3>🚩 Flags to the Area Manager</h3><ul>${plan.flags.map(f=>`<li>${esc(f)}</li>`).join("")}</ul></div>`;
-  h += `<p class="fresh">Read at ${esc(timeOf(live.sheet.fetchedAt))}: Team Sheet · Open-Meteo forecast (${esc(timeOf(live.forecast.fetchedAt))}) · Met Éireann warnings (${live.warnings.error?"unavailable":live.warnings.rawCount+" in force nationally"}) · thresholds from stored history ${esc(live.history.period)}.</p>`;
+  h += `<p class="fresh">Read at ${esc(timeOf(live.sheet.fetchedAt))}: Team Sheet · Open-Meteo forecast (${esc(timeOf(live.forecast.fetchedAt))}${live.forecast.stale?", CACHED":live.forecast.reused?", reused":""}) · Met Éireann warnings (${live.warnings.error?"unavailable":live.warnings.rawCount+" in force nationally"}) · thresholds from stored history ${esc(live.history.period)}.</p>`;
   $("plan").innerHTML = h;
 }
 
@@ -979,6 +1016,7 @@ async function refreshPlan(){
     const plan = computePlan(live);
     renderPlan(live, plan); renderSources(live);
     if(live.warnings.error) setStatus("warn","Warnings feed down");
+    else if(live.forecast.stale) setStatus("warn","Cached forecast");
     else if(plan.usesRehearsal) setStatus("rehearsal","Rehearsal · "+timeOf(live.sheet.fetchedAt));
     else setStatus("live","Live · "+timeOf(live.sheet.fetchedAt));
     return {live, plan};
@@ -1021,7 +1059,7 @@ RULES FOR YOU:
 ${FLOOD_PLAN}
 
 DATA (read live at ${new Date().toISOString()}):
-SOURCES: Team Sheet read ${live.sheet.fetchedAt}; Open-Meteo Flood API (Copernicus GloFAS) forecast read ${live.forecast.fetchedAt}; Met Éireann warnings read ${live.warnings.fetchedAt} (${live.warnings.error?"UNAVAILABLE: "+live.warnings.error+" - say warnings could not be checked":live.warnings.rawCount+" warnings in force nationally"}); thresholds from stored history ${live.history.period}, model points as listed.
+SOURCES: Team Sheet read ${live.sheet.fetchedAt}; Open-Meteo Flood API (Copernicus GloFAS) forecast read ${live.forecast.fetchedAt} via ${live.forecast.via||"direct"}${live.forecast.stale?" - THIS IS A CACHED COPY because the live forecast service was unavailable; say so clearly and advise checking again":""}; Met Éireann warnings read ${live.warnings.fetchedAt} (${live.warnings.error?"UNAVAILABLE: "+live.warnings.error+" - say warnings could not be checked":live.warnings.rawCount+" warnings in force nationally"}); thresholds from stored history ${live.history.period}, model points as listed.
 ALL_LIVE_WARNINGS: ${JSON.stringify(live.warnings.warnings.map(w=>({level:w.level,type:w.type,counties:w.counties,onset:w.onset,expiry:w.expiry,in48h:w.inNext48h,headline:w.headline})))}
 TONIGHT_PLAN (live): ${JSON.stringify(compact(plan))}
 ${whatIfPlan?`WHAT_IF_PLAN (hypothetical scenario requested in the question, NOT live): ${JSON.stringify(compact(whatIfPlan))}`:""}
@@ -1056,7 +1094,7 @@ function buildWorking(live, plan, isWhatIf){
       ${plan.usesRehearsal?`<p style="margin:0 0 6px"><span class="tag rehearsal">Rehearsal</span> Sheet override values in use.</p>`:""}
       <div class="scroll"><table><tr><th>Town</th><th>Level</th><th>Peak m³/s</th><th>95th / 99th</th><th>Warning</th><th>Crew</th></tr>${rows}</table></div>
       ${plan.flags.length?`<p style="margin:8px 0 0"><b>Flags:</b> ${esc(plan.flags.join("; "))}</p>`:""}
-      <p style="margin:8px 0 0">Sources: Team Sheet ${esc(timeOf(live.sheet.fetchedAt))} · Open-Meteo forecast ${esc(timeOf(live.forecast.fetchedAt))} · Met Éireann ${live.warnings.error?"unavailable":esc(timeOf(live.warnings.fetchedAt))} · thresholds ${esc(live.history.period)}.</p>
+      <p style="margin:8px 0 0">Sources: Team Sheet ${esc(timeOf(live.sheet.fetchedAt))} · Open-Meteo forecast ${esc(timeOf(live.forecast.fetchedAt))}${live.forecast.stale?" (CACHED)":""} · Met Éireann ${live.warnings.error?"unavailable":esc(timeOf(live.warnings.fetchedAt))} · thresholds ${esc(live.history.period)}.</p>
     </div></details>`;
 }
 

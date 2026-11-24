@@ -3,6 +3,7 @@
 // (Worker > Settings > Variables and Secrets > Add > Type: Secret):
 //   GEMINI_API_KEY  (required)  Google Gemini key
 //   GROQ_API_KEY    (optional)  Groq key, used only if every Gemini model fails
+// It also relays the river forecast (GET /flood) so a rate-limited connection can still read it.
 // The page sends the messages here; this Worker adds the key and forwards them.
 // Gemini's free tier allows about 20 requests per day PER MODEL, so if a model is busy (503),
 // out of quota (429), retired (404) or too slow, the Worker moves on to the next model.
@@ -20,6 +21,10 @@ const MAX_BODY_CHARS = 60000;   // stops very large (costly) requests
 const MAX_MODELS = 8;           // most Gemini models tried per question
 const CALL_TIMEOUT_MS = 25000;  // give up on a stuck model
 const DEADLINE_MS = 75000;      // stop trying new models after this (Cloudflare cuts off at ~100 s)
+
+const FLOOD_API = "https://flood-api.open-meteo.com/v1/flood";
+const FLOOD_CACHE_MS = 30 * 60 * 1000;  // river forecasts update about daily; 30 min keeps calls to Open-Meteo low
+const floodCache = new Map();           // upstream URL -> { t, body }
 
 let cachedModels = null;          // models this key can use (cached per Worker instance)
 const exhausted = new Map();      // model -> time until which it is skipped (out of daily quota)
@@ -78,6 +83,28 @@ export default {
       new Response(JSON.stringify(obj), { status, headers: { ...cors, "Content-Type": "application/json" } });
 
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
+    // River forecast relay: lets the page read Open-Meteo from Cloudflare's address if its own is rate-limited.
+    if (request.method === "GET" && url.pathname.endsWith("/flood")) {
+      if (!allowed) return json({ error: { message: "This service only answers the River Watch page." } }, 403);
+      const p = url.searchParams, coords = /^-?d{1,3}(.d+)?(,-?d{1,3}(.d+)?){0,19}$/;
+      if (!coords.test(p.get("latitude") || "") || !coords.test(p.get("longitude") || "") || p.get("daily") !== "river_discharge"
+          || !/^d{1,2}$/.test(p.get("forecast_days") || "")) return json({ error: { message: "Bad forecast request." } }, 400);
+      const up = new URL(FLOOD_API);
+      for (const k of ["latitude", "longitude", "daily", "forecast_days", "timezone"]) if (p.get(k)) up.searchParams.set(k, p.get(k));
+      const key = up.toString(), hit = floodCache.get(key);
+      const send = (body, status, cache) => new Response(body, { status, headers: { ...cors, "Content-Type": "application/json", "X-Cache": cache } });
+      if (hit && Date.now() - hit.t < FLOOD_CACHE_MS) return send(hit.body, 200, "HIT");
+      try {
+        const r = await fetch(key, { signal: AbortSignal.timeout(15000) });
+        const body = await r.text();
+        if (r.ok) { floodCache.set(key, { t: Date.now(), body }); return send(body, 200, "MISS"); }
+        if (hit) return send(hit.body, 200, "STALE");
+        return send(body, r.status, "ERROR");
+      } catch (e) {
+        if (hit) return send(hit.body, 200, "STALE");
+        return json({ error: { message: "Forecast service did not answer." } }, 504);
+      }
+    }
     if (request.method === "GET" && url.pathname.endsWith("/models")) {
       if (!env.GEMINI_API_KEY) return json({ error: { message: "Server key not configured." } }, 500);
       return json({ models: await listModels(env.GEMINI_API_KEY), skippedForQuota: [...exhausted.keys()] });
