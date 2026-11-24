@@ -86,9 +86,9 @@ export default {
     // River forecast relay: lets the page read Open-Meteo from Cloudflare's address if its own is rate-limited.
     if (request.method === "GET" && url.pathname.endsWith("/flood")) {
       if (!allowed) return json({ error: { message: "This service only answers the River Watch page." } }, 403);
-      const p = url.searchParams, coords = /^-?d{1,3}(.d+)?(,-?d{1,3}(.d+)?){0,19}$/;
+      const p = url.searchParams, coords = /^-?\d{1,3}(\.\d+)?(,-?\d{1,3}(\.\d+)?){0,19}$/;
       if (!coords.test(p.get("latitude") || "") || !coords.test(p.get("longitude") || "") || p.get("daily") !== "river_discharge"
-          || !/^d{1,2}$/.test(p.get("forecast_days") || "")) return json({ error: { message: "Bad forecast request." } }, 400);
+          || !/^\d{1,2}$/.test(p.get("forecast_days") || "")) return json({ error: { message: "Bad forecast request." } }, 400);
       const up = new URL(FLOOD_API);
       for (const k of ["latitude", "longitude", "daily", "forecast_days", "timezone"]) if (p.get(k)) up.searchParams.set(k, p.get(k));
       const key = up.toString(), hit = floodCache.get(key);
