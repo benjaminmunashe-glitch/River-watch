@@ -56,7 +56,8 @@
     <h2>⚙️ Settings: your AI key</h2>
     <div class="row">
       <select id="provider" style="width:auto">
-        <option value="gemini">Google Gemini</option>
+        <option value="server">River Watch server: no key needed</option>
+        <option value="gemini">Google Gemini (your own key)</option>
         <option value="groq">Groq</option>
       </select>
       <input id="key" class="grow" type="password" placeholder="Paste your API key here" autocomplete="off">
@@ -115,10 +116,14 @@ const SHEET_CSV = () => `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz
 const WARNINGS_URL = "https://www.met.ie/Open_Data/json/warning_IRELAND.json";
 const FLOOD_API = "https://flood-api.open-meteo.com/v1/flood";
 const HISTORY_URL = "data/history_summary.json";
-// AI providers (both use the OpenAI-compatible chat format)
+// Server-side route: Cloudflare Worker holding the Gemini key as an encrypted secret (GEMINI_API_KEY).
+const WORKER_URL = "https://river-watch-ai.benjaminmunashe.workers.dev/";
+// AI providers (all use the OpenAI-compatible chat format)
 const PROVIDERS = {
+  server: { name: "River Watch server (Gemini, key kept on Cloudflare)", url: WORKER_URL, noKey: true,
+            models: ["gemini-3.8-flash", "gemini-3.8-flash-lite"] },
   gemini: { name: "Google Gemini", url: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
-            models: ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"] },
+            models: ["gemini-3.8-flash", "gemini-3.8-flash-lite"] },
   groq:   { name: "Groq", url: "https://api.groq.com/openai/v1/chat/completions",
             models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "openai/gpt-oss-120b"] }
 };
@@ -404,8 +409,12 @@ async function refreshModels(){
     if(list.length) fillModels(list);
   }catch(e){ $("keyStatus").textContent += " (Could not list models: "+e.message+". Using defaults.)"; }
 }
-function keyStatus(){ $("keyStatus").textContent = load(keyStore(provider())) ? `✅ A ${PROVIDERS[provider()].name} key is saved in this browser.` : `No ${PROVIDERS[provider()].name} key saved. The plan table works without a key; the AI chat needs one.`; }
-$("provider").value = load(PROVIDER_STORE) || "gemini";
+function keyStatus(){
+  const p = PROVIDERS[provider()];
+  $("key").disabled = $("saveKey").disabled = $("forgetKey").disabled = !!p.noKey;
+  if(p.noKey){ $("keyStatus").textContent = "✅ No key needed: questions go to the River Watch server, where the Gemini key is kept as an encrypted Cloudflare secret."; return; }
+  $("keyStatus").textContent = load(keyStore(provider())) ? `✅ A ${PROVIDERS[provider()].name} key is saved in this browser.` : `No ${PROVIDERS[provider()].name} key saved. The plan table works without a key; the AI chat needs one.`; }
+$("provider").value = load(PROVIDER_STORE) || "server";
 $("provider").onchange = ()=>{ store(PROVIDER_STORE, provider()); keyStatus(); refreshModels(); };
 $("saveKey").onclick = ()=>{ const k=$("key").value.trim(); if(!k) return; store(keyStore(provider()),k); $("key").value=""; keyStatus(); refreshModels(); };
 $("forgetKey").onclick = ()=>{ store(keyStore(provider()),null); keyStatus(); refreshModels(); };
@@ -528,12 +537,14 @@ async function ask(q){
   const wi = parseWhatIf(q, ctx.live.history);
   let wiPlan = null;
   if(wi){ wiPlan = computePlan({...ctx.live, whatIf:wi}); renderPlan(ctx.live, wiPlan); }
-  if(!key){ addMsg(`<span class="err">No ${esc(prov.name)} key saved: paste one in Settings to get an AI answer.</span> The plan table below has been recomputed from live data.`); return; }
+  if(!key && !prov.noKey){ addMsg(`<span class="err">No ${esc(prov.name)} key saved: paste one in Settings to get an AI answer.</span> The plan table below has been recomputed from live data.`); return; }
   setBusy(true,"Asking the AI to explain the computed plan…");
   const model = $("model").value;
   const messages = [{role:"system", content: systemPrompt(ctx.live, ctx.plan, wiPlan)}, ...chatHistory.slice(-4), {role:"user", content:q}];
   try{
-    const r = await fetch(prov.url,{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+key},
+    const headers = {"Content-Type":"application/json"};
+    if(!prov.noKey) headers.Authorization = "Bearer "+key;
+    const r = await fetch(prov.url,{method:"POST",headers,
       body:JSON.stringify({model, messages, temperature:0.1, max_tokens:4000})});
     const j0 = await r.json();
     const j = Array.isArray(j0) ? j0[0] : j0;
@@ -542,7 +553,7 @@ async function ask(q){
     chatHistory.push({role:"user",content:q},{role:"assistant",content:ans});
     const u = j.usage||{}; const usage = JSON.parse(load(COUNT_STORE)||'{"questions":0,"in":0,"out":0}');
     usage.questions++; usage.in += u.prompt_tokens||0; usage.out += u.completion_tokens||0; store(COUNT_STORE, JSON.stringify(usage));
-    addMsg(`<b>River Watch</b> <span class="muted">(${esc(model)} via ${esc(prov.name)})</span>${mdToHtml(ans)}<p class="muted">Tokens this answer: ${u.prompt_tokens||"?"} in / ${u.completion_tokens||"?"} out · Questions sent from this browser: ${usage.questions} (${usage.in} in / ${usage.out} out tokens). AI can make mistakes; a person makes the final decision.</p>`);
+    addMsg(`<b>River Watch</b> <span class="muted">(${esc(j.model_used||j.model||model)} via ${esc(prov.name)})</span>${mdToHtml(ans)}<p class="muted">Tokens this answer: ${u.prompt_tokens||"?"} in / ${u.completion_tokens||"?"} out · Questions sent from this browser: ${usage.questions} (${usage.in} in / ${usage.out} out tokens). AI can make mistakes; a person makes the final decision.</p>`);
     setBusy(false,"Answered "+new Date().toLocaleTimeString());
   }catch(e){ setBusy(false); addMsg(`<span class="err">AI unavailable: ${esc(e.message)}</span> The computed plan table below is still valid.`); }
 }
