@@ -1,20 +1,28 @@
-// River Watch: Cloudflare Worker that keeps the Gemini key server-side.
-// The key is NOT in this file. It lives in Cloudflare as an encrypted secret named GEMINI_API_KEY
-// (Worker > Settings > Variables and Secrets > Add > Type: Secret).
-// The page sends the messages here; this Worker adds the key and forwards them to Gemini.
-// If Gemini is busy (503/429) or a model is retired (404), it retries and falls back to another Gemini model.
+// River Watch: Cloudflare Worker that keeps the AI keys server-side.
+// No key is in this file. Keys live in Cloudflare as encrypted secrets
+// (Worker > Settings > Variables and Secrets > Add > Type: Secret):
+//   GEMINI_API_KEY  (required)  Google Gemini key
+//   GROQ_API_KEY    (optional)  Groq key, used only if every Gemini model fails
+// The page sends the messages here; this Worker adds the key and forwards them.
+// Gemini's free tier allows about 20 requests per day PER MODEL, so if a model is busy (503),
+// out of quota (429), retired (404) or too slow, the Worker moves on to the next model.
 
 const ALLOWED_ORIGINS = ["https://benjaminmunashe-glitch.github.io"]; // only River Watch's page may use it
 const DEFAULT_MODEL = "gemini-3.5-flash";
-// Tested 24 Nov 2026: 3.5-flash answered in ~2 s; 3.7/3.8-flash were overloaded. Tried in this order after the requested model.
-const PREFERRED = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"];
-const CALL_TIMEOUT_MS = 25000; // give up on a stuck model and try the next one
+// Tried in this order after the requested model (only those this key can use).
+const PREFERRED = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite",
+  "gemini-flash-latest", "gemini-flash-lite-latest", "gemini-2.5-flash-lite", "gemini-3.7-flash", "gemini-3.8-flash"];
+const GROQ_MODEL = "llama-3.3-70b-versatile";
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
-const CHAT_URL = GEMINI_BASE + "/openai/chat/completions";
+const GEMINI_CHAT = GEMINI_BASE + "/openai/chat/completions";
+const GROQ_CHAT = "https://api.groq.com/openai/v1/chat/completions";
 const MAX_BODY_CHARS = 60000;   // stops very large (costly) requests
-const MAX_ATTEMPTS = 3;         // total model calls per question (3 x 25 s stays under Cloudflare's ~100 s limit)
+const MAX_MODELS = 8;           // most Gemini models tried per question
+const CALL_TIMEOUT_MS = 25000;  // give up on a stuck model
+const DEADLINE_MS = 75000;      // stop trying new models after this (Cloudflare cuts off at ~100 s)
 
-let cachedModels = null;        // list of chat models this key can use (cached per Worker instance)
+let cachedModels = null;          // models this key can use (cached per Worker instance)
+const exhausted = new Map();      // model -> time until which it is skipped (out of daily quota)
 
 async function listModels(key) {
   if (cachedModels) return cachedModels;
@@ -24,18 +32,36 @@ async function listModels(key) {
   cachedModels = (j.models || [])
     .filter(m => (m.supportedGenerationMethods || []).includes("generateContent"))
     .map(m => m.name.replace(/^models\//, ""))
-    .filter(n => /^gemini-/.test(n) && !/(tts|image|embedding|live|audio|vision|preview-native)/.test(n));
+    .filter(n => /^gemini-/.test(n) && /flash/.test(n) && !/(tts|image|embedding|live|audio|vision|transcribe|preview-native)/.test(n));
   return cachedModels;
 }
 
-// Order: the requested model, then other "flash" models (newest first), then any other Gemini model.
-function fallbackOrder(requested, available) {
+function modelOrder(requested, available) {
   const ver = n => parseFloat((n.match(/gemini-(\d+(?:\.\d+)?)/) || [0, 0])[1]);
-  const byNewest = [...available].sort((a, b) => ver(b) - ver(a));
-  const flash = byNewest.filter(n => /flash/.test(n) && !/lite/.test(n));
-  const lite = byNewest.filter(n => /flash-lite/.test(n));
-  return [...new Set([requested, ...PREFERRED.filter(m => available.includes(m)), ...flash, ...lite, ...byNewest])];
+  const others = [...available].sort((a, b) => ver(b) - ver(a));
+  const list = [requested, ...PREFERRED.filter(m => available.includes(m)), ...others];
+  const now = Date.now();
+  return [...new Set(list)].filter(m => !(exhausted.get(m) > now));
 }
+
+async function callModel(url, key, model, messages, timeoutMs) {
+  try {
+    const r = await fetch(url, {
+      signal: AbortSignal.timeout(timeoutMs),
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + key },
+      body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 4000 })
+    });
+    return { status: r.status, ok: r.ok, text: await r.text() };
+  } catch (e) {
+    return { status: 504, ok: false, text: JSON.stringify({ error: { message: `${model} did not answer within ${Math.round(timeoutMs / 1000)} s` } }) };
+  }
+}
+
+const errMsg = text => {
+  try { const j = JSON.parse(text); return ((Array.isArray(j) ? j[0] : j).error?.message || "").slice(0, 300); }
+  catch { return String(text).slice(0, 300); }
+};
 
 export default {
   async fetch(request, env) {
@@ -54,12 +80,13 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: cors });
     if (request.method === "GET" && url.pathname.endsWith("/models")) {
       if (!env.GEMINI_API_KEY) return json({ error: { message: "Server key not configured." } }, 500);
-      return json({ models: await listModels(env.GEMINI_API_KEY) });
+      return json({ models: await listModels(env.GEMINI_API_KEY), skippedForQuota: [...exhausted.keys()] });
     }
-    if (request.method === "GET") return json({ ok: true, service: "River Watch AI proxy", keyConfigured: !!env.GEMINI_API_KEY, defaultModel: DEFAULT_MODEL });
+    if (request.method === "GET") return json({ ok: true, service: "River Watch AI proxy", keyConfigured: !!env.GEMINI_API_KEY,
+      groqBackup: !!env.GROQ_API_KEY, defaultModel: DEFAULT_MODEL });
     if (request.method !== "POST") return json({ error: { message: "Method not allowed" } }, 405);
     if (!allowed) return json({ error: { message: "This service only answers the River Watch page." } }, 403);
-    if (!env.GEMINI_API_KEY) return json({ error: { message: "Server key not configured (GEMINI_API_KEY secret missing)." } }, 500);
+    if (!env.GEMINI_API_KEY && !env.GROQ_API_KEY) return json({ error: { message: "Server key not configured." } }, 500);
 
     const raw = await request.text();
     if (raw.length > MAX_BODY_CHARS) return json({ error: { message: "Request too large." } }, 413);
@@ -69,38 +96,40 @@ export default {
     if (!messages.length) return json({ error: { message: "No messages." } }, 400);
     const requested = /^gemini-[\w.-]+$/.test(body.model || "") ? body.model : DEFAULT_MODEL;
 
-    let order = [requested];
+    const start = Date.now();
     const tried = [];
-    let last = null;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      if (attempt === 1) order = fallbackOrder(requested, await listModels(env.GEMINI_API_KEY));
-      // attempt 0: requested; attempt 1: requested again (busy) or next model; later: next models
-      const model = attempt === 1 && last && last.status === 429 ? requested
-                  : order.find(m => !tried.includes(m)) || requested;
-      if (attempt > 0) await new Promise(r => setTimeout(r, 1200));
-      let r;
-      try {
-        r = await fetch(CHAT_URL, { signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
-        method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.GEMINI_API_KEY },
-        body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 4000 })
-      });
-      } catch (e) {
-        if (!tried.includes(model)) tried.push(model);
-        last = { status: 504, text: JSON.stringify({ error: { message: model + " did not answer within " + CALL_TIMEOUT_MS / 1000 + " s" } }) };
-        continue;
+    let lastErr = "";
+    let lastStatus = 502;
+
+    if (env.GEMINI_API_KEY) {
+      const order = modelOrder(requested, await listModels(env.GEMINI_API_KEY)).slice(0, MAX_MODELS);
+      for (const model of order) {
+        const left = DEADLINE_MS - (Date.now() - start);
+        if (left < 5000) break;
+        const r = await callModel(GEMINI_CHAT, env.GEMINI_API_KEY, model, messages, Math.min(CALL_TIMEOUT_MS, left));
+        tried.push(model);
+        if (r.ok) {
+          try { const j = JSON.parse(r.text); const o = Array.isArray(j) ? j[0] : j; o.model_used = model; o.models_tried = tried; return json(o); }
+          catch { return new Response(r.text, { status: 200, headers: { ...cors, "Content-Type": "application/json" } }); }
+        }
+        lastErr = errMsg(r.text); lastStatus = r.status;
+        if (r.status === 429 && /per ?day|daily|PerDay/i.test(lastErr)) exhausted.set(model, Date.now() + 3 * 3600 * 1000);
+        if (![404, 429, 500, 503, 504].includes(r.status)) break; // e.g. bad key: no point trying other models
       }
-      const text = await r.text();
-      if (!tried.includes(model)) tried.push(model);
-      if (r.ok) {
-        try { const j = JSON.parse(text); j.model_used = model; j.models_tried = tried; return json(j); }
-        catch { return new Response(text, { status: 200, headers: { ...cors, "Content-Type": "application/json" } }); }
-      }
-      last = { status: r.status, text };
-      if (![404, 429, 500, 503, 504].includes(r.status)) break; // e.g. bad key: no point retrying
     }
-    let err;
-    try { const j = JSON.parse(last.text); err = (Array.isArray(j) ? j[0] : j).error?.message; } catch { err = last.text.slice(0, 300); }
-    return json({ error: { message: `Gemini unavailable after trying ${tried.join(", ")}: ${err}` } }, last.status || 502);
+
+    // Last resort: Groq, if a GROQ_API_KEY secret has been added.
+    if (env.GROQ_API_KEY) {
+      const left = DEADLINE_MS + 15000 - (Date.now() - start);
+      const r = await callModel(GROQ_CHAT, env.GROQ_API_KEY, GROQ_MODEL, messages, Math.max(5000, Math.min(CALL_TIMEOUT_MS, left)));
+      tried.push("groq/" + GROQ_MODEL);
+      if (r.ok) {
+        try { const o = JSON.parse(r.text); o.model_used = "groq/" + GROQ_MODEL; o.models_tried = tried; return json(o); }
+        catch { return new Response(r.text, { status: 200, headers: { ...cors, "Content-Type": "application/json" } }); }
+      }
+      lastErr = errMsg(r.text); lastStatus = r.status;
+    }
+
+    return json({ error: { message: `AI unavailable after trying ${tried.join(", ")}: ${lastErr}` } }, lastStatus || 502);
   }
 };
