@@ -2,112 +2,481 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="River Watch: flood decision support for eight Irish towns, built on live river forecasts, Met Éireann warnings and the team's Flood Plan.">
+<meta name="theme-color" content="#0B1F3A">
 <title>River Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  :root{--bg:#f5f7fa;--card:#fff;--ink:#1b2430;--muted:#5b6675;--line:#dde3ea;--accent:#1f5fa8;
-        --normal:#2e7d32;--standby:#b26a00;--barriers:#c62828;--flag:#fff4e5;--rehearse:#7b1fa2}
+  /* ============ Design tokens ============ */
+  :root{
+    --navy-950:#071528; --navy-900:#0B1F3A; --navy-800:#12305A; --navy-700:#1B3F70;
+    --teal-700:#0B7A7A; --teal-600:#0E8C8C; --teal-500:#14A3A0; --teal-100:#DDF4F2;
+    --bg:#F2F5F9; --surface:#FFFFFF; --surface-2:#F7F9FC; --surface-3:#EEF2F7;
+    --ink:#0F1B2D; --ink-2:#33445C; --muted:#5D6E86; --line:#E1E7EF;
+    --accent:var(--teal-600); --accent-ink:#FFFFFF; --accent-soft:var(--teal-100);
+    --bubble-user:var(--navy-800); --bubble-user-ink:#FFFFFF;
+    --barriers:#C93C3C; --barriers-bg:#FDECEC; --barriers-ink:#8E1F1F;
+    --standby:#B7700F; --standby-bg:#FDF2E1; --standby-ink:#7A4A06;
+    --normal:#22844F; --normal-bg:#E5F4EB; --normal-ink:#145C35;
+    --rehearse:#7A3FD6; --rehearse-bg:#F1EAFE; --rehearse-ink:#55239E;
+    --warn-bg:#FFF7DB; --warn-ink:#6B5200; --warn-line:#F0DA8A;
+    --shadow-sm:0 1px 2px rgba(15,27,45,.06);
+    --shadow:0 1px 2px rgba(15,27,45,.05),0 6px 20px rgba(15,27,45,.07);
+    --shadow-lg:0 12px 40px rgba(7,21,40,.22);
+    --r-sm:10px; --r:16px; --r-lg:22px;
+    --font:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#08111F; --surface:#0F1C30; --surface-2:#13233B; --surface-3:#1A2C47;
+      --ink:#E7EEF8; --ink-2:#C3CFDF; --muted:#93A3BA; --line:#22354F;
+      --accent:var(--teal-500); --accent-soft:rgba(20,163,160,.16);
+      --bubble-user:#1D4A7E;
+      --barriers:#F06A6A; --barriers-bg:rgba(240,106,106,.14); --barriers-ink:#FFB4B4;
+      --standby:#F0AA45; --standby-bg:rgba(240,170,69,.14); --standby-ink:#FFD69A;
+      --normal:#4CC285; --normal-bg:rgba(76,194,133,.14); --normal-ink:#A6EBC5;
+      --rehearse:#A97BF5; --rehearse-bg:rgba(169,123,245,.16); --rehearse-ink:#D9C4FF;
+      --warn-bg:#2A2410; --warn-ink:#F3DE93; --warn-line:#4D421A;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#08111F; --surface:#0F1C30; --surface-2:#13233B; --surface-3:#1A2C47;
+    --ink:#E7EEF8; --ink-2:#C3CFDF; --muted:#93A3BA; --line:#22354F;
+    --accent:var(--teal-500); --accent-soft:rgba(20,163,160,.16);
+    --bubble-user:#1D4A7E;
+    --barriers:#F06A6A; --barriers-bg:rgba(240,106,106,.14); --barriers-ink:#FFB4B4;
+    --standby:#F0AA45; --standby-bg:rgba(240,170,69,.14); --standby-ink:#FFD69A;
+    --normal:#4CC285; --normal-bg:rgba(76,194,133,.14); --normal-ink:#A6EBC5;
+    --rehearse:#A97BF5; --rehearse-bg:rgba(169,123,245,.16); --rehearse-ink:#D9C4FF;
+    --warn-bg:#2A2410; --warn-ink:#F3DE93; --warn-line:#4D421A;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.25);
+  }
+
+  /* ============ Base ============ */
   *{box-sizing:border-box}
-  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
-  header{background:#123a66;color:#fff;padding:14px 16px}
-  header h1{margin:0;font-size:1.4rem}
-  header p{margin:2px 0 0;opacity:.85;font-size:.9rem}
-  .disclaimer{background:#fff8d6;border-bottom:1px solid #e8d77a;padding:8px 16px;font-size:.9rem;font-weight:600}
-  main{max-width:1100px;margin:0 auto;padding:16px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
-  h2{font-size:1.1rem;margin:0 0 10px}
-  input,select,button,textarea{font:inherit}
-  input[type=password],input[type=text],select,textarea{padding:8px;border:1px solid var(--line);border-radius:6px;width:100%}
-  button{padding:8px 12px;border-radius:6px;border:1px solid var(--accent);background:var(--accent);color:#fff;cursor:pointer}
-  button.secondary{background:#fff;color:var(--accent)}
-  button:disabled{opacity:.5;cursor:wait}
-  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .row > *{flex:0 0 auto}
-  .grow{flex:1 1 240px!important}
-  .muted{color:var(--muted);font-size:.88rem}
-  .quick button{background:#eef4fb;color:var(--accent);border-color:#c9dcf2;margin:3px 3px 3px 0;font-size:.9rem}
-  .tablewrap{overflow-x:auto}
-  table{border-collapse:collapse;width:100%;font-size:.88rem}
-  th,td{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}
-  th{background:#f0f3f7;white-space:nowrap}
-  .lvl{font-weight:700;padding:2px 8px;border-radius:12px;color:#fff;white-space:nowrap}
-  .Normal{background:var(--normal)}.Standby{background:var(--standby)}.Barriers{background:var(--barriers)}
-  .rehearsal{color:var(--rehearse);font-weight:700}
-  .flag{background:var(--flag)}
-  #answer{white-space:normal}
-  #answer table{margin:8px 0}
-  .msg{border-left:4px solid var(--accent);padding:8px 12px;margin:10px 0;background:#f8fbff;border-radius:4px}
-  .msg.user{border-color:#888;background:#fafafa}
-  .err{color:#b00020;font-weight:600}
-  details summary{cursor:pointer;font-weight:600}
-  code{background:#f0f3f7;padding:1px 4px;border-radius:4px}
-  footer{max-width:1100px;margin:0 auto;padding:0 16px 30px;font-size:.8rem;color:var(--muted)}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--font);font-size:15px;line-height:1.5;background:var(--bg);color:var(--ink);
+       -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:3px solid var(--teal-500);outline-offset:2px;border-radius:8px}
+  a{color:var(--accent)}
+  .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+  /* ============ App shell ============ */
+  .app{display:flex;flex-direction:column;height:100dvh;height:100vh;max-height:100dvh}
+  @supports (height:100dvh){.app{height:100dvh}}
+
+  .topbar{flex:0 0 auto;display:flex;align-items:center;gap:12px;padding:10px 16px;
+          padding-top:calc(10px + env(safe-area-inset-top));
+          background:linear-gradient(135deg,var(--navy-900),var(--navy-800));color:#fff;box-shadow:var(--shadow-sm);z-index:20}
+  .brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+  .logo{width:36px;height:36px;border-radius:11px;flex:0 0 auto;display:grid;place-items:center;
+        background:linear-gradient(135deg,var(--teal-500),var(--teal-700));box-shadow:inset 0 0 0 1px rgba(255,255,255,.15)}
+  .brand h1{margin:0;font-size:1.05rem;font-weight:800;letter-spacing:-.01em;line-height:1.1}
+  .brand p{margin:1px 0 0;font-size:.74rem;opacity:.72;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pill{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font-size:.78rem;font-weight:600;
+        background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.16);color:#fff;white-space:nowrap}
+  .pill .dot{width:8px;height:8px;border-radius:50%;background:#9FB3CC;flex:0 0 auto}
+  .pill[data-kind="live"] .dot{background:#3DDC97;box-shadow:0 0 0 0 rgba(61,220,151,.6);animation:pulse 2s infinite}
+  .pill[data-kind="loading"] .dot{background:#9FB3CC;animation:blink 1s infinite}
+  .pill[data-kind="rehearsal"] .dot{background:#C7A6FF}
+  .pill[data-kind="warn"] .dot{background:#FFC857}
+  .pill[data-kind="error"] .dot{background:#FF6B6B}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(61,220,151,.55)}70%{box-shadow:0 0 0 8px rgba(61,220,151,0)}100%{box-shadow:0 0 0 0 rgba(61,220,151,0)}}
+  @keyframes blink{50%{opacity:.35}}
+  .iconbtn{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,.16);
+           background:rgba(255,255,255,.08);color:#fff;flex:0 0 auto;transition:background .15s}
+  .iconbtn:hover{background:rgba(255,255,255,.16)}
+  .pillbtn{border:0;background:none;padding:0}
+
+  .disclaimer{flex:0 0 auto;display:flex;align-items:center;gap:8px;justify-content:center;text-align:center;
+              padding:7px 14px;font-size:.8rem;font-weight:600;background:var(--warn-bg);color:var(--warn-ink);
+              border-bottom:1px solid var(--warn-line);z-index:15}
+
+  /* Tabs: top on desktop, bottom bar on mobile */
+  .tabs{flex:0 0 auto;display:flex;gap:4px;background:var(--surface);border-top:1px solid var(--line);
+        padding:6px 8px calc(6px + env(safe-area-inset-bottom));order:10;z-index:15}
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border:0;border-radius:12px;
+       background:none;color:var(--muted);font-size:.72rem;font-weight:600;transition:color .15s,background .15s}
+  .tab svg{width:22px;height:22px}
+  .tab[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
+  @media (min-width:820px){
+    .tabs{order:0;justify-content:center;border-top:0;border-bottom:1px solid var(--line);padding:8px 16px}
+    .tab{flex:0 0 auto;flex-direction:row;gap:8px;padding:8px 16px;font-size:.88rem}
+    .tab svg{width:18px;height:18px}
+  }
+  main{flex:1 1 auto;min-height:0;position:relative}
+  .panel{position:absolute;inset:0;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .panel[hidden]{display:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:16px}
+
+  /* ============ Chat ============ */
+  #panel-chat{display:flex;flex-direction:column;overflow:hidden}
+  .thread{flex:1 1 auto;overflow-y:auto;padding:18px 14px 8px;scroll-behavior:smooth}
+  .thread-inner{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .msg{display:flex;gap:10px;align-items:flex-end;animation:rise .22s ease-out}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .msg.user{justify-content:flex-end}
+  .avatar{width:30px;height:30px;border-radius:10px;flex:0 0 auto;display:grid;place-items:center;
+          background:linear-gradient(135deg,var(--teal-500),var(--teal-700));color:#fff}
+  .bubble{max-width:min(680px,86%);padding:11px 14px;border-radius:18px;box-shadow:var(--shadow-sm);overflow-wrap:anywhere}
+  .msg.user .bubble{background:var(--bubble-user);color:var(--bubble-user-ink);border-bottom-right-radius:6px;white-space:pre-wrap}
+  .msg.bot .bubble{background:var(--surface);border:1px solid var(--line);border-bottom-left-radius:6px;width:100%}
+  .msg.bot.error .bubble{border-color:var(--barriers);background:var(--barriers-bg)}
+  .bubble-meta{margin-top:8px;font-size:.74rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center}
+  .bubble-meta .ai-note{font-weight:600}
+  /* markdown */
+  .md> :first-child{margin-top:0}
+  .md> :last-child{margin-bottom:0}
+  .md p{margin:.5em 0}
+  .md h3,.md h4{margin:.9em 0 .35em;font-size:.98rem;font-weight:700;letter-spacing:-.005em}
+  .md h3{font-size:1.02rem}
+  .md ul,.md ol{margin:.4em 0;padding-left:1.25em}
+  .md li{margin:.18em 0}
+  .md li::marker{color:var(--accent)}
+  .md code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.86em;background:var(--surface-3);padding:1px 5px;border-radius:6px}
+  .md hr{border:0;border-top:1px solid var(--line);margin:.9em 0}
+  .md blockquote{margin:.5em 0;padding:.4em .8em;border-left:3px solid var(--accent);background:var(--surface-2);border-radius:0 8px 8px 0}
+  .md-table{overflow-x:auto;margin:.6em 0;border:1px solid var(--line);border-radius:10px}
+  .md-table table{border-collapse:collapse;width:100%;font-size:.84rem}
+  .md-table th,.md-table td{padding:6px 9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  .md-table th{background:var(--surface-2);font-weight:600;white-space:nowrap}
+  .md-table tr:last-child td{border-bottom:0}
+  /* working */
+  details.working{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:var(--surface-2)}
+  details.working>summary{list-style:none;cursor:pointer;padding:8px 12px;font-size:.8rem;font-weight:600;color:var(--accent);
+                          display:flex;align-items:center;gap:6px;user-select:none}
+  details.working>summary::-webkit-details-marker{display:none}
+  details.working>summary .chev{transition:transform .2s}
+  details.working[open]>summary .chev{transform:rotate(90deg)}
+  .working-body{padding:0 12px 12px;font-size:.8rem;color:var(--ink-2)}
+  .working-body table{border-collapse:collapse;width:100%;font-size:.78rem}
+  .working-body th,.working-body td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  .working-body th{color:var(--muted);font-weight:600;white-space:nowrap}
+  .working-body .scroll{overflow-x:auto}
+  /* typing */
+  .typing{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:.85rem}
+  .dots{display:inline-flex;gap:4px}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--accent);opacity:.35;animation:bounce 1.2s infinite}
+  .dots i:nth-child(2){animation-delay:.15s}.dots i:nth-child(3){animation-delay:.3s}
+  @keyframes bounce{0%,60%,100%{opacity:.35;transform:none}30%{opacity:1;transform:translateY(-4px)}}
+  /* welcome */
+  .welcome{text-align:center;padding:8px 6px 4px}
+  .welcome .big-logo{width:56px;height:56px;border-radius:18px;margin:4px auto 10px;display:grid;place-items:center;
+                     background:linear-gradient(135deg,var(--teal-500),var(--navy-800));color:#fff;box-shadow:var(--shadow)}
+  .welcome h2{margin:0 0 4px;font-size:1.2rem;font-weight:800;letter-spacing:-.01em}
+  .welcome p{margin:0 auto;max-width:520px;color:var(--muted);font-size:.9rem}
+  /* composer */
+  .composer{flex:0 0 auto;background:linear-gradient(to top,var(--bg) 70%,transparent);padding:6px 12px 12px}
+  .composer-inner{max-width:820px;margin:0 auto}
+  .chips{display:flex;gap:8px;overflow-x:auto;padding:4px 2px 10px;scrollbar-width:none}
+  .chips::-webkit-scrollbar{display:none}
+  .chip{flex:0 0 auto;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:var(--surface);color:var(--ink-2);
+        font-size:.82rem;font-weight:500;box-shadow:var(--shadow-sm);transition:border-color .15s,color .15s,transform .1s}
+  .chip:hover{border-color:var(--accent);color:var(--accent)}
+  .chip:active{transform:scale(.97)}
+  .inputbar{display:flex;align-items:flex-end;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:22px;
+            padding:6px 6px 6px 14px;box-shadow:var(--shadow)}
+  .inputbar:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
+  .inputbar textarea{flex:1;border:0;outline:0;background:transparent;resize:none;max-height:140px;padding:8px 0;line-height:1.4}
+  .send{width:40px;height:40px;border-radius:50%;border:0;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);
+        flex:0 0 auto;transition:opacity .15s,transform .1s}
+  .send:disabled{opacity:.45;cursor:not-allowed}
+  .send:not(:disabled):active{transform:scale(.94)}
+  .composer-hint{text-align:center;font-size:.72rem;color:var(--muted);margin-top:6px}
+
+  /* ============ Cards / plan ============ */
+  .section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:4px 0 14px}
+  .section-head h2{margin:0;font-size:1.25rem;font-weight:800;letter-spacing:-.015em}
+  .section-head p{margin:2px 0 0;color:var(--muted);font-size:.85rem}
+  .btn{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border-radius:12px;border:1px solid var(--accent);
+       background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:.88rem;transition:filter .15s,transform .1s}
+  .btn:hover{filter:brightness(1.06)}
+  .btn:active{transform:scale(.98)}
+  .btn.ghost{background:var(--surface);color:var(--accent);border-color:var(--line)}
+  .btn.danger{background:var(--surface);color:var(--barriers);border-color:var(--line)}
+  .btn:disabled{opacity:.5;cursor:wait}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .stat{border-radius:var(--r);padding:12px 14px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow-sm);
+        display:flex;flex-direction:column;gap:2px}
+  .stat .n{font-size:1.6rem;font-weight:800;line-height:1.1}
+  .stat .l{font-size:.78rem;font-weight:600;display:flex;align-items:center;gap:6px}
+  .stat.Barriers .n{color:var(--barriers)} .stat.Standby .n{color:var(--standby)} .stat.Normal .n{color:var(--normal)}
+  .banner{display:flex;gap:10px;align-items:flex-start;padding:10px 14px;border-radius:var(--r-sm);margin-bottom:12px;font-size:.86rem;font-weight:500}
+  .banner.rehearsal{background:var(--rehearse-bg);color:var(--rehearse-ink);border:1px solid color-mix(in srgb,var(--rehearse) 35%,transparent)}
+  .banner.error{background:var(--barriers-bg);color:var(--barriers-ink);border:1px solid color-mix(in srgb,var(--barriers) 35%,transparent)}
+  .banner.info{background:var(--accent-soft);color:var(--ink-2);border:1px solid var(--line)}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:640px){.grid{grid-template-columns:repeat(2,1fr)}}
+  @media (min-width:1000px){.grid{grid-template-columns:repeat(3,1fr)}}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+  .town{position:relative;overflow:hidden;padding:14px 14px 12px 18px;display:flex;flex-direction:column;gap:10px}
+  .town::before{content:"";position:absolute;left:0;top:0;bottom:0;width:5px;background:var(--lvl,var(--line))}
+  .town.Barriers{--lvl:var(--barriers)} .town.Standby{--lvl:var(--standby)} .town.Normal{--lvl:var(--normal)}
+  .town.flagged{box-shadow:0 0 0 2px color-mix(in srgb,var(--barriers) 40%,transparent),var(--shadow)}
+  .town-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  .town-head h3{margin:0;font-size:1.05rem;font-weight:700;letter-spacing:-.01em}
+  .town-head .sub{margin:1px 0 0;font-size:.8rem;color:var(--muted)}
+  .badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:.76rem;font-weight:700;white-space:nowrap}
+  .badge svg{width:11px;height:11px}
+  .badge.Barriers{background:var(--barriers-bg);color:var(--barriers-ink)}
+  .badge.Standby{background:var(--standby-bg);color:var(--standby-ink)}
+  .badge.Normal{background:var(--normal-bg);color:var(--normal-ink)}
+  .badge.Unknown{background:var(--surface-3);color:var(--muted)}
+  .badge.sm{padding:2px 7px;font-size:.7rem}
+  .peak{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+  .peak .num{font-size:1.65rem;font-weight:800;letter-spacing:-.02em;line-height:1}
+  .peak .unit{font-size:.78rem;color:var(--muted);font-weight:500}
+  .tag{display:inline-block;padding:2px 7px;border-radius:6px;font-size:.68rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+  .tag.live{background:var(--accent-soft);color:var(--accent)}
+  .tag.rehearsal{background:var(--rehearse-bg);color:var(--rehearse-ink)}
+  .tag.whatif{background:var(--standby-bg);color:var(--standby-ink)}
+  .gauge{position:relative;height:10px;border-radius:999px;background:var(--surface-3);margin:6px 0 18px}
+  .gauge .fill{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--gfill,var(--normal))}
+  .gauge .mark{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink-2);opacity:.55;border-radius:2px}
+  .gauge .mark span{position:absolute;top:16px;transform:translateX(-50%);font-size:.66rem;color:var(--muted);white-space:nowrap;font-weight:600}
+  .days{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+  .day{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:5px 8px;font-size:.74rem;color:var(--muted)}
+  .day b{display:block;color:var(--ink);font-size:.86rem}
+  .day.peakday{border-color:var(--accent)}
+  .facts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:.84rem}
+  .facts li{display:flex;gap:8px;align-items:flex-start}
+  .facts .k{flex:0 0 74px;color:var(--muted);font-weight:600;font-size:.76rem;padding-top:1px}
+  .facts .v{flex:1;min-width:0}
+  .src{font-size:.74rem;color:var(--muted)}
+  .src summary{cursor:pointer;font-weight:600}
+  .crews{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:760px){.crews{grid-template-columns:repeat(3,1fr)}}
+  .crew{padding:14px}
+  .crew h3{margin:0 0 2px;font-size:.98rem;font-weight:700}
+  .crew .cap{display:flex;gap:5px;margin:8px 0}
+  .crew .cap i{width:22px;height:8px;border-radius:999px;background:var(--surface-3)}
+  .crew .cap i.on{background:var(--accent)}
+  .crew ul{margin:6px 0 0;padding:0;list-style:none;display:flex;flex-wrap:wrap;gap:6px}
+  .crew li{padding:4px 10px;border-radius:999px;background:var(--barriers-bg);color:var(--barriers-ink);font-weight:600;font-size:.8rem}
+  .crew .none{color:var(--muted);font-size:.84rem}
+  .crew .note{margin-top:8px;font-size:.76rem;color:var(--standby-ink);background:var(--standby-bg);padding:6px 8px;border-radius:8px}
+  .flags{margin-top:12px;padding:12px 14px}
+  .flags h3{margin:0 0 6px;font-size:.95rem}
+  .flags ul{margin:0;padding-left:1.1em;font-size:.86rem}
+  h2.sub-h{font-size:1.02rem;font-weight:700;margin:22px 0 10px;letter-spacing:-.01em}
+  .fresh{margin-top:16px;font-size:.76rem;color:var(--muted)}
+  .skeleton{height:190px;border-radius:var(--r);background:linear-gradient(90deg,var(--surface) 25%,var(--surface-2) 50%,var(--surface) 75%);
+            background-size:200% 100%;animation:shimmer 1.3s infinite;border:1px solid var(--line)}
+  @keyframes shimmer{to{background-position:-200% 0}}
+
+  /* ============ Sources ============ */
+  .srcgrid{display:grid;grid-template-columns:1fr;gap:12px}
+  @media (min-width:760px){.srcgrid{grid-template-columns:repeat(2,1fr)}}
+  .srccard{padding:14px}
+  .srccard h3{margin:0 0 4px;font-size:.95rem;font-weight:700;display:flex;align-items:center;gap:8px}
+  .srccard p{margin:4px 0;font-size:.84rem;color:var(--ink-2)}
+  .srccard .lic{font-size:.74rem;color:var(--muted)}
+  .tablecard{overflow:hidden}
+  .tablecard .scroll{overflow-x:auto}
+  .tablecard table{border-collapse:collapse;width:100%;font-size:.84rem}
+  .tablecard th,.tablecard td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  .tablecard th{background:var(--surface-2);font-weight:600;color:var(--muted);font-size:.76rem;text-transform:uppercase;letter-spacing:.03em}
+  .tablecard tr:last-child td{border-bottom:0}
+  .tablecard tr.top td{background:var(--accent-soft);font-weight:600}
+  .prose{font-size:.88rem;color:var(--ink-2)}
+  .prose p{margin:.4em 0}
+
+  /* ============ Settings slide-over ============ */
+  .scrim{position:fixed;inset:0;background:rgba(7,21,40,.45);opacity:0;pointer-events:none;transition:opacity .2s;z-index:40}
+  .scrim.open{opacity:1;pointer-events:auto}
+  .sheet{position:fixed;top:0;right:0;bottom:0;width:min(420px,100%);background:var(--surface);z-index:50;box-shadow:var(--shadow-lg);
+         transform:translateX(100%);transition:transform .25s ease;display:flex;flex-direction:column;
+         padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+  .sheet.open{transform:none}
+  .sheet-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .sheet-head h2{margin:0;font-size:1.05rem;font-weight:700}
+  .sheet-close{width:38px;height:38px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);display:grid;place-items:center}
+  .sheet-body{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:18px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field label,.field .label{font-size:.8rem;font-weight:600;color:var(--ink-2)}
+  .control{width:100%;padding:10px 12px;border-radius:12px;border:1px solid var(--line);background:var(--surface-2)}
+  .control:focus{outline:0;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .control:disabled{opacity:.55}
+  .keyrow{display:flex;gap:8px}
+  .keyrow .control{flex:1}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .help{font-size:.78rem;color:var(--muted);margin:0}
+  .status-box{padding:10px 12px;border-radius:12px;background:var(--surface-2);border:1px solid var(--line);font-size:.82rem}
+  .seg{display:flex;background:var(--surface-3);border-radius:12px;padding:3px}
+  .seg button{flex:1;border:0;background:none;padding:7px;border-radius:9px;font-size:.82rem;font-weight:600;color:var(--muted)}
+  .seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+  .usage{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .usage div{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:8px;text-align:center}
+  .usage b{display:block;font-size:1.05rem}
+  .usage span{font-size:.7rem;color:var(--muted)}
 </style>
 </head>
 <body>
-<header>
-  <h1>🌊 River Watch</h1>
-  <p>Flood decision support for the shared flood response team: eight Irish towns, Flood Plan 2026/27</p>
-</header>
-<div class="disclaimer">⚠️ AI can make mistakes; a person makes the final decision. River Watch recommends, it never sends a crew. The Duty Officer decides by 16:00.</div>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M2 8c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 13c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 18c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg>
+      </div>
+      <div style="min-width:0">
+        <h1>River Watch</h1>
+        <p>Flood decision support · 8 towns · Flood Plan 2026/27</p>
+      </div>
+    </div>
+    <button class="pillbtn" id="statusBtn" title="Reload live data" aria-label="Data status. Press to reload live data">
+      <span class="pill" id="statusPill" data-kind="loading" aria-live="polite"><span class="dot"></span><span id="statusText">Connecting…</span></span>
+    </button>
+    <button class="iconbtn" id="openSettings" aria-label="Open settings" aria-haspopup="dialog" aria-controls="settings">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </header>
 
-<main>
-  <section class="card" id="settings">
-    <h2>⚙️ Settings: your AI key</h2>
-    <div class="row">
-      <select id="provider" style="width:auto">
+  <div class="disclaimer" role="note">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></svg>
+    <span>AI can make mistakes; a person makes the final decision.</span>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" id="tab-chat" aria-controls="panel-chat" aria-selected="true" data-tab="chat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Chat</span>
+    </button>
+    <button class="tab" role="tab" id="tab-plan" aria-controls="panel-plan" aria-selected="false" data-tab="plan">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="m9 15 2 2 4-4"/></svg>
+      <span>Tonight's Plan</span>
+    </button>
+    <button class="tab" role="tab" id="tab-sources" aria-controls="panel-sources" aria-selected="false" data-tab="sources">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg>
+      <span>Sources &amp; Method</span>
+    </button>
+  </nav>
+
+  <main>
+    <!-- CHAT -->
+    <section class="panel" id="panel-chat" role="tabpanel" aria-labelledby="tab-chat">
+      <div class="thread" id="thread" aria-live="polite">
+        <div class="thread-inner" id="threadInner">
+          <div class="welcome">
+            <div class="big-logo" aria-hidden="true">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><path d="M2 8c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 13c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 18c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg>
+            </div>
+            <h2>Ask River Watch</h2>
+            <p>Every question re-reads the Team Sheet, the river forecast and Met Éireann warnings. The code applies the Flood Plan; the AI explains it. Open <b>Show working</b> under any answer to see the numbers.</p>
+          </div>
+        </div>
+      </div>
+      <div class="composer">
+        <div class="composer-inner">
+          <div class="chips" id="chips" role="list" aria-label="Suggested questions">
+            <button class="chip" role="listitem" data-q="What is tonight's plan?">What is tonight's plan?</button>
+            <button class="chip" role="listitem" data-q="Why is Fermoy at that level?">Why is Fermoy at that level?</button>
+            <button class="chip" role="listitem" data-q="What if the Suir at Clonmel reaches 150 m³/s?">What if the Suir at Clonmel reaches 150 m³/s?</button>
+            <button class="chip" role="listitem" data-q="Which town should be first in line for a flood-defence study?">Which town should be first for a flood-defence study?</button>
+            <button class="chip" role="listitem" data-q="Will my house in Mallow flood tonight?">Will my house in Mallow flood tonight?</button>
+          </div>
+          <form class="inputbar" id="composer" autocomplete="off">
+            <label for="question" class="sr-only">Your question</label>
+            <textarea id="question" rows="1" placeholder="Ask about tonight's plan, a town, crews or a what-if…"></textarea>
+            <button class="send" id="ask" type="submit" aria-label="Send question">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>
+            </button>
+          </form>
+          <div class="composer-hint">Enter to send · Shift+Enter for a new line · River Watch recommends; the Duty Officer decides by 16:00</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PLAN -->
+    <section class="panel" id="panel-plan" role="tabpanel" aria-labelledby="tab-plan" hidden>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Tonight's Plan</h2>
+            <p>Computed by code from live data and the Flood Plan, not by the AI.</p>
+          </div>
+          <button class="btn" id="planOnly" type="button">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>
+            Refresh (no AI)
+          </button>
+        </div>
+        <div id="plan">
+          <div class="grid"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SOURCES -->
+    <section class="panel" id="panel-sources" role="tabpanel" aria-labelledby="tab-sources" hidden>
+      <div class="wrap">
+        <div class="section-head">
+          <div>
+            <h2>Sources &amp; Method</h2>
+            <p>Where every number comes from, the stored history and the Area Manager's answer.</p>
+          </div>
+        </div>
+        <div id="sources"><div class="skeleton"></div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- SETTINGS SLIDE-OVER -->
+<div class="scrim" id="scrim"></div>
+<aside class="sheet" id="settings" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
+  <div class="sheet-head">
+    <h2 id="settingsTitle">Settings</h2>
+    <button class="sheet-close" id="closeSettings" aria-label="Close settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
+  </div>
+  <div class="sheet-body">
+    <div class="field">
+      <label for="provider">AI provider</label>
+      <select id="provider" class="control">
         <option value="server">River Watch server: no key needed</option>
         <option value="gemini">Google Gemini (your own key)</option>
-        <option value="groq">Groq</option>
+        <option value="groq">Groq (your own key)</option>
       </select>
-      <input id="key" class="grow" type="password" placeholder="Paste your API key here" autocomplete="off">
-      <button id="saveKey">Save key</button>
-      <button id="forgetKey" class="secondary">Forget key</button>
     </div>
-    <div class="row" style="margin-top:8px">
-      <label class="muted" for="model">Model:</label>
-      <select id="model" class="grow"></select>
+    <div class="field">
+      <label for="key">API key</label>
+      <div class="keyrow">
+        <input id="key" class="control" type="password" placeholder="Paste your API key here" autocomplete="off" spellcheck="false">
+        <button class="btn ghost" id="toggleKey" type="button" aria-label="Show or hide key">Show</button>
+      </div>
+      <div class="row">
+        <button class="btn" id="saveKey" type="button">Save key</button>
+        <button class="btn danger" id="forgetKey" type="button">Forget key</button>
+      </div>
+      <div class="status-box" id="keyStatus" aria-live="polite"></div>
+      <p class="help">A pasted key is kept only in this browser (localStorage) and sent only to the chosen provider. It is never in this page's code or the GitHub repository. The default server route keeps the Gemini key as an encrypted Cloudflare secret.</p>
     </div>
-    <p class="muted" id="keyStatus"></p>
-    <p class="muted">The key is kept only in this browser (localStorage) and is sent only to the chosen provider (generativelanguage.googleapis.com or api.groq.com). It is not in this page's code or the GitHub repository.</p>
-  </section>
-
-  <section class="card">
-    <h2>💬 Ask River Watch</h2>
-    <div class="quick">
-      <button data-q="What is tonight's plan?">What is tonight's plan?</button>
-      <button data-q="Why is Fermoy at that level?">Why is Fermoy at that level?</button>
-      <button data-q="What if the Suir at Clonmel reaches 150 m³/s?">What if the Suir at Clonmel reaches 150 m³/s?</button>
-      <button data-q="Which town should be first in line for a flood-defence study?">Which town should be first in line for a flood-defence study?</button>
-      <button data-q="Will my house in Mallow flood tonight?">Will my house in Mallow flood tonight?</button>
+    <div class="field">
+      <label for="model">Model</label>
+      <select id="model" class="control"></select>
     </div>
-    <div class="row" style="margin-top:8px">
-      <textarea id="question" class="grow" rows="2" placeholder="Type a question, e.g. Where does the Athlone crew go tonight?"></textarea>
-      <button id="ask">Ask</button>
-      <button id="planOnly" class="secondary" title="Recompute the plan from live data without calling the AI">Refresh plan (no AI)</button>
+    <div class="field">
+      <span class="label">Appearance</span>
+      <div class="seg" role="group" aria-label="Theme">
+        <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
     </div>
-    <p class="muted" id="status"></p>
-    <div id="chat"></div>
-  </section>
-
-  <section class="card">
-    <h2>📋 Tonight's plan: the working (computed by code, not by the AI)</h2>
-    <div id="plan" class="muted">Press <b>Refresh plan</b> or ask a question to load live data.</div>
-  </section>
-
-  <section class="card">
-    <details>
-      <summary>📚 Sources, thresholds and the Area Manager's history</summary>
-      <div id="sources" class="muted" style="margin-top:8px"></div>
-    </details>
-  </section>
-</main>
-
-<footer>
-  River flow: Open-Meteo Flood API (open-meteo.com), based on Copernicus Emergency Management Service GloFAS data, CC BY 4.0.
-  Weather warnings: Met Éireann (met.ie), CC BY 4.0. Team data: River Watch Team Sheet (fictional values).
-  Out of scope: coastal and tidal flooding, road closures, insurance and individual homes. Ask the council's area office.
-</footer>
+    <div class="field">
+      <span class="label">AI usage from this browser</span>
+      <div class="usage" id="usage"></div>
+    </div>
+    <p class="help">River flow: Open-Meteo Flood API (Copernicus EMS GloFAS), CC BY 4.0. Warnings: Met Éireann, CC BY 4.0. Team data: River Watch Team Sheet (fictional values). Out of scope: coastal and tidal flooding, road closures, insurance and individual homes. Ask the council's area office.</p>
+  </div>
+</aside>
 
 <script id="core">
 /* ===================== CONFIG ===================== */
@@ -380,21 +749,60 @@ async function gatherLive(){
 </script>
 
 <script>
-/* ===================== UI ===================== */
+/* ===================== UI (presentation only: logic lives in the core script) ===================== */
 const $ = id => document.getElementById(id);
-const PROVIDER_STORE = "riverwatch_provider", COUNT_STORE = "riverwatch_usage";
+const PROVIDER_STORE = "riverwatch_provider", COUNT_STORE = "riverwatch_usage", THEME_STORE = "riverwatch_theme";
 const keyStore = p => "riverwatch_key_"+p, modelStore = p => "riverwatch_model_"+p;
 let chatHistory = [];
 
 function store(k,v){ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){} }
 function load(k){ try{ return localStorage.getItem(k);}catch(e){ return null; } }
+
+/* ---------- Icons for level labels (shape + colour + text) ---------- */
+const LVL_ICON = {
+  Barriers: '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 11H1z" fill="currentColor"/></svg>',
+  Standby:  '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1 11 6 6 11 1 6z" fill="currentColor"/></svg>',
+  Normal:   '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="currentColor"/></svg>',
+  Unknown:  '<svg viewBox="0 0 12 12" aria-hidden="true"><circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+};
+const badge = (lvl, sm) => `<span class="badge ${lvl}${sm?" sm":""}">${LVL_ICON[lvl]||""}${esc(lvl)}</span>`;
+const timeOf = iso => { try{ return new Date(iso).toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"}); }catch(e){ return iso; } };
+
+/* ---------- Theme ---------- */
+function applyTheme(choice){
+  if(choice==="light"||choice==="dark") document.documentElement.setAttribute("data-theme", choice);
+  else document.documentElement.removeAttribute("data-theme");
+  document.querySelectorAll("[data-theme-choice]").forEach(b=>b.setAttribute("aria-pressed", String(b.dataset.themeChoice===(choice||"auto"))));
+}
+applyTheme(load(THEME_STORE)||"auto");
+document.querySelectorAll("[data-theme-choice]").forEach(b=>b.onclick=()=>{ store(THEME_STORE,b.dataset.themeChoice); applyTheme(b.dataset.themeChoice); });
+
+/* ---------- Tabs ---------- */
+function showTab(name){
+  document.querySelectorAll(".tab").forEach(t=>t.setAttribute("aria-selected", String(t.dataset.tab===name)));
+  ["chat","plan","sources"].forEach(n=>{ $("panel-"+n).hidden = n!==name; });
+}
+document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>showTab(t.dataset.tab));
+
+/* ---------- Settings slide-over ---------- */
+let lastFocus = null;
+function openSettings(){ lastFocus=document.activeElement; $("settings").classList.add("open"); $("scrim").classList.add("open");
+  $("settings").setAttribute("aria-hidden","false"); renderUsage(); setTimeout(()=>$("provider").focus(),50); }
+function closeSettings(){ $("settings").classList.remove("open"); $("scrim").classList.remove("open");
+  $("settings").setAttribute("aria-hidden","true"); if(lastFocus) lastFocus.focus(); }
+$("openSettings").onclick = openSettings;
+$("closeSettings").onclick = closeSettings;
+$("scrim").onclick = closeSettings;
+document.addEventListener("keydown", e=>{ if(e.key==="Escape" && $("settings").classList.contains("open")) closeSettings(); });
+$("toggleKey").onclick = ()=>{ const k=$("key"); const show=k.type==="password"; k.type=show?"text":"password"; $("toggleKey").textContent=show?"Hide":"Show"; };
+
+/* ---------- Provider / key / model (same storage and behaviour as before) ---------- */
 const provider = () => $("provider").value;
 function fillModels(list){
   const p = provider(), saved = load(modelStore(p));
   $("model").innerHTML = list.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join("");
   $("model").value = list.includes(saved) ? saved : list[0];
 }
-// If a Gemini key is saved, ask Google which models this key can use (model names change over time).
 async function refreshModels(){
   const p = provider(); fillModels(PROVIDERS[p].models);
   const key = load(keyStore(p));
@@ -411,9 +819,10 @@ async function refreshModels(){
 }
 function keyStatus(){
   const p = PROVIDERS[provider()];
-  $("key").disabled = $("saveKey").disabled = $("forgetKey").disabled = !!p.noKey;
+  $("key").disabled = $("saveKey").disabled = $("forgetKey").disabled = $("toggleKey").disabled = !!p.noKey;
   if(p.noKey){ $("keyStatus").textContent = "✅ No key needed: questions go to the River Watch server, where the Gemini key is kept as an encrypted Cloudflare secret."; return; }
-  $("keyStatus").textContent = load(keyStore(provider())) ? `✅ A ${PROVIDERS[provider()].name} key is saved in this browser.` : `No ${PROVIDERS[provider()].name} key saved. The plan table works without a key; the AI chat needs one.`; }
+  $("keyStatus").textContent = load(keyStore(provider())) ? `✅ A ${PROVIDERS[provider()].name} key is saved in this browser.` : `No ${PROVIDERS[provider()].name} key saved. The plan works without a key; the AI chat needs one.`;
+}
 $("provider").value = load(PROVIDER_STORE) || "server";
 $("provider").onchange = ()=>{ store(PROVIDER_STORE, provider()); keyStatus(); refreshModels(); };
 $("saveKey").onclick = ()=>{ const k=$("key").value.trim(); if(!k) return; store(keyStore(provider()),k); $("key").value=""; keyStatus(); refreshModels(); };
@@ -421,63 +830,167 @@ $("forgetKey").onclick = ()=>{ store(keyStore(provider()),null); keyStatus(); re
 $("model").onchange = ()=>store(modelStore(provider()),$("model").value);
 keyStatus(); refreshModels();
 
-function renderPlan(live, plan){
-  const p = plan;
-  let h = "";
-  if(p.usesWhatIf) h += `<p class="rehearsal">⚠️ This table shows a WHAT-IF scenario, not tonight's live plan.</p>`;
-  if(p.usesRehearsal) h += `<p class="rehearsal">⚠️ REHEARSAL values from the Sheet are in use (marked in purple).</p>`;
-  h += `<div class="tablewrap"><table><tr><th>Town</th><th>River (county)</th><th>Forecast m³/s (date: flow)</th><th>Peak used</th><th>95th / 99th pct</th><th>% vs 99th</th><th>Warnings</th><th>Level</th><th>Action</th></tr>`;
-  for(const t of p.towns){
-    const fc = t.forecastDays.map(d=>`${d.date.slice(5)}: ${fmt(d.flow)}`).join("<br>");
-    const warn = [...t.raisingWarnings.map(w=>`<span class="${w.source.startsWith("REHEARSAL")?"rehearsal":""}">${esc(w.level.toUpperCase())} (${esc(w.source)}) raises one level</span>`),
-                  ...t.yellowOrOther.map(x=>`<span class="muted">${esc(x)} (no change)</span>`)].join("<br>") || "None";
-    h += `<tr class="${t.flag?"flag":""}"><td><b>${esc(t.town)}</b></td><td>${esc(t.river)} (${esc(t.counties.join(" + "))})</td><td>${fc}</td>
-      <td class="${t.rehearsalFlow||p.usesWhatIf?"rehearsal":""}">${fmt(t.peak)}<br><span class="muted">${esc(t.peakSource)}</span></td>
-      <td>${fmt(t.p95)} / ${fmt(t.p99)}</td><td>${t.pctAboveP99==null?"n/a":(t.pctAboveP99>=0?"+":"")+fmt(t.pctAboveP99)+"%"}</td>
-      <td>${warn}</td><td><span class="lvl ${t.levelName}">${t.levelName}</span>${t.baseLevel!==t.level?`<br><span class="muted">flow alone: ${LEVELS[t.baseLevel]}</span>`:""}</td>
-      <td>${esc(t.action)}${t.notes&&!/^normal service$/i.test(t.notes)?`<br><span class="muted">Notes: ${esc(t.notes)}</span>`:""}</td></tr>`;
-  }
-  h += `</table></div><h3 style="font-size:1rem">🚐 Crews</h3><ul>`;
-  for(const [b,c] of Object.entries(p.crews))
-    h += `<li><b>${esc(b)} crew</b>: ${c.towns.length?esc(c.towns.join(", ")):"no barrier jobs tonight"} <span class="muted">(capacity ${c.capacity}, area ${esc(c.area.join(", "))}${c.restriction?"; "+esc(c.restriction):""})</span></li>`;
-  h += `</ul>`;
-  if(p.flags.length) h += `<p><b>🚩 Flags to Area Manager:</b></p><ul>${p.flags.map(f=>`<li>${esc(f)}</li>`).join("")}</ul>`;
-  if(p.missing.length) h += `<p class="err">No history or forecast for: ${esc(p.missing.join(", "))}. These towns cannot be assessed.</p>`;
-  h += `<p class="muted">Data read: Sheet ${esc(live.sheet.fetchedAt)} · Forecast ${esc(live.forecast.fetchedAt)} · Warnings ${esc(live.warnings.fetchedAt)} (${live.warnings.error?`<span class="err">UNAVAILABLE: ${esc(live.warnings.error)}</span>`:`${live.warnings.rawCount} warning(s) in force nationally`}) · Thresholds from stored history ${esc(live.history.period)}.</p>`;
-  $("plan").innerHTML = h;
-  $("plan").classList.remove("muted");
+function renderUsage(){
+  const u = JSON.parse(load(COUNT_STORE)||'{"questions":0,"in":0,"out":0}');
+  $("usage").innerHTML = `<div><b>${u.questions}</b><span>questions</span></div><div><b>${u.in.toLocaleString()}</b><span>tokens in</span></div><div><b>${u.out.toLocaleString()}</b><span>tokens out</span></div>`;
 }
 
+/* ---------- Status pill ---------- */
+function setStatus(kind, text){ $("statusPill").dataset.kind = kind; $("statusText").textContent = text; }
+$("statusBtn").onclick = ()=>refreshPlan().catch(()=>{});
+
+/* ---------- Markdown (escaped first, then a safe subset) ---------- */
+function mdInline(s){
+  return s.replace(/`([^`]+)`/g,"<code>$1</code>")
+          .replace(/\*\*([^*]+)\*\*/g,"<strong>$1</strong>")
+          .replace(/__([^_]+)__/g,"<strong>$1</strong>")
+          .replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=[\s).,;:!?]|$)/g,"$1<em>$2</em>");
+}
+function mdToHtml(md){
+  const lines = esc(md).replace(/\r/g,"").split("\n");
+  let html="", list=null, table=[], para=[];
+  const flushPara=()=>{ if(para.length){ html+=`<p>${mdInline(para.join("<br>"))}</p>`; para=[]; } };
+  const flushList=()=>{ if(list){ html+=`</${list}>`; list=null; } };
+  const flushTable=()=>{ if(!table.length) return;
+    const rows=table.filter(r=>!/^\s*\|?\s*:?-{2,}/.test(r));
+    html+="<div class='md-table'><table>"+rows.map((r,i)=>"<tr>"+r.trim().replace(/^\||\|$/g,"").split("|")
+      .map(c=>i?`<td>${mdInline(c.trim())}</td>`:`<th>${mdInline(c.trim())}</th>`).join("")+"</tr>").join("")+"</table></div>";
+    table=[]; };
+  for(const l of lines){
+    if(/^\s*\|.*\|\s*$/.test(l)){ flushPara(); flushList(); table.push(l); continue; } else flushTable();
+    if(!l.trim()){ flushPara(); flushList(); continue; }
+    let m;
+    if((m=l.match(/^\s*(#{1,6})\s+(.*)$/))){ flushPara(); flushList(); const h=m[1].length<=2?3:4; html+=`<h${h}>${mdInline(m[2])}</h${h}>`; continue; }
+    if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l)){ flushPara(); flushList(); html+="<hr>"; continue; }
+    if((m=l.match(/^\s*[-*•]\s+(.*)$/))){ flushPara(); if(list!=="ul"){ flushList(); html+="<ul>"; list="ul"; } html+=`<li>${mdInline(m[1])}</li>`; continue; }
+    if((m=l.match(/^\s*\d+[.)]\s+(.*)$/))){ flushPara(); if(list!=="ol"){ flushList(); html+="<ol>"; list="ol"; } html+=`<li>${mdInline(m[1])}</li>`; continue; }
+    if((m=l.match(/^\s*&gt;\s?(.*)$/))){ flushPara(); flushList(); html+=`<blockquote>${mdInline(m[1])}</blockquote>`; continue; }
+    flushList(); para.push(l.trim());
+  }
+  flushPara(); flushList(); flushTable();
+  return html;
+}
+
+/* ---------- Plan rendering (cards) ---------- */
+function peakTag(t, plan){
+  if(plan.usesWhatIf && /^WHAT-IF/.test(t.peakSource)) return '<span class="tag whatif">What-if</span>';
+  if(t.rehearsalFlow) return '<span class="tag rehearsal">Rehearsal</span>';
+  return '<span class="tag live">Live</span>';
+}
+function gauge(t){
+  if(t.peak==null) return "";
+  const scale = Math.max(t.p99*1.3, t.peak*1.08), pos = v => Math.min(100, v/scale*100);
+  const fill = t.baseLevel===2 ? "var(--barriers)" : t.baseLevel===1 ? "var(--standby)" : "var(--normal)";
+  return `<div class="gauge" role="img" aria-label="Peak ${fmt(t.peak)} against 95th ${fmt(t.p95)} and 99th ${fmt(t.p99)} percentiles">
+    <div class="fill" style="width:${pos(t.peak)}%;--gfill:${fill}"></div>
+    <div class="mark" style="left:${pos(t.p95)}%"><span>95th ${fmt(t.p95)}</span></div>
+    <div class="mark" style="left:${pos(t.p99)}%"><span>99th ${fmt(t.p99)}</span></div></div>`;
+}
+function townCard(t, plan){
+  const days = t.forecastDays.map(d=>`<div class="day${d.flow===t.livePeak?" peakday":""}">${esc(d.date.slice(5))}<b>${fmt(d.flow)}</b></div>`).join("");
+  const warn = [...t.raisingWarnings.map(w=>`<span class="${w.source.startsWith("REHEARSAL")?"tag rehearsal":"tag whatif"}">${esc(w.level)}</span> ${esc(w.source)}: raises one level`),
+                ...t.yellowOrOther.map(x=>`${esc(x)} <span class="src">(no change)</span>`)].join("<br>") || "None in force for "+esc(t.counties.join(" + "));
+  const pct = t.pctAboveP99==null ? "n/a" : (t.pctAboveP99>=0?"+":"")+fmt(t.pctAboveP99)+"% vs 99th";
+  const raised = t.baseLevel!=null && t.baseLevel!==t.level ? `<div class="src">Flow alone: ${esc(LEVELS[t.baseLevel])}</div>` : "";
+  const notes = t.notes && !/^normal service$/i.test(t.notes) ? `<li><span class="k">Notes</span><span class="v">${esc(t.notes)}</span></li>` : "";
+  return `<article class="card town ${t.levelName}${t.flag?" flagged":""}">
+    <div class="town-head"><div><h3>${esc(t.town)}</h3><p class="sub">${esc(t.river)} · ${esc(t.counties.join(" + "))}</p></div>
+      <div style="text-align:right">${badge(t.levelName)}${raised}</div></div>
+    <div class="peak"><span class="num">${fmt(t.peak)}</span><span class="unit">m³/s peak · ${esc(pct)}</span>${peakTag(t,plan)}</div>
+    ${gauge(t)}
+    <div class="days" aria-label="Forecast for today and the next two days">${days}</div>
+    <ul class="facts">
+      <li><span class="k">Action</span><span class="v">${esc(t.action)}</span></li>
+      <li><span class="k">Warnings</span><span class="v">${warn}</span></li>
+      ${t.crew?`<li><span class="k">Crew</span><span class="v">${esc(t.crew)} crew (rank ${t.crewRank})</span></li>`:""}
+      ${notes}
+    </ul>
+    <details class="src"><summary>Where these numbers come from</summary>
+      <p style="margin:6px 0 0">${esc(t.peakSource)}. Thresholds: stored 2016-2025 history at model point ${esc(t.historyPoint)}. ${esc(t.barrierReason)}.</p></details>
+  </article>`;
+}
+function renderPlan(live, plan){
+  const n = l => plan.towns.filter(t=>t.levelName===l).length;
+  let h = `<div class="summary">
+    <div class="stat Barriers"><span class="n">${n("Barriers")}</span><span class="l">${LVL_ICON.Barriers.replace("<svg","<svg width='11' height='11' style='color:var(--barriers)'")}Barriers</span></div>
+    <div class="stat Standby"><span class="n">${n("Standby")}</span><span class="l">${LVL_ICON.Standby.replace("<svg","<svg width='11' height='11' style='color:var(--standby)'")}Standby</span></div>
+    <div class="stat Normal"><span class="n">${n("Normal")}</span><span class="l">${LVL_ICON.Normal.replace("<svg","<svg width='11' height='11' style='color:var(--normal)'")}Normal</span></div></div>`;
+  if(plan.usesRehearsal) h += `<div class="banner rehearsal">⚠️ <span><b>Rehearsal values in use.</b> Values from the Sheet's override columns replace live data where marked “Rehearsal”.</span></div>`;
+  if(live.warnings.error) h += `<div class="banner error">⚠️ <span><b>Met Éireann warnings could not be read</b> (${esc(live.warnings.error)}). Check warnings manually.</span></div>`;
+  if(plan.missing.length) h += `<div class="banner error">⚠️ <span>No history or forecast for: ${esc(plan.missing.join(", "))}. These towns cannot be assessed.</span></div>`;
+  const order = {Barriers:0, Standby:1, Normal:2, Unknown:3};
+  const towns = [...plan.towns].sort((a,b)=>(order[a.levelName]-order[b.levelName]));
+  h += `<div class="grid">${towns.map(t=>townCard(t,plan)).join("")}</div>`;
+  h += `<h2 class="sub-h">🚐 Crews tonight</h2><div class="crews">`;
+  for(const [b,c] of Object.entries(plan.crews)){
+    const cap = Array.from({length:CREW_CAPACITY},(_,i)=>`<i class="${i<c.towns.length?"on":""}"></i>`).join("");
+    h += `<div class="card crew"><h3>${esc(b)} crew</h3><div class="src">Area: ${esc(c.area.join(", "))}</div>
+      <div class="cap" aria-label="${c.towns.length} of ${c.capacity} places used">${cap}</div>
+      ${c.towns.length?`<ul>${c.towns.map(t=>`<li>▲ ${esc(t)}</li>`).join("")}</ul>`:`<div class="none">No barrier jobs tonight</div>`}
+      ${c.restriction?`<div class="note">${esc(c.restriction)}</div>`:""}
+      <div class="src" style="margin-top:6px">Capacity tonight: ${c.capacity} town(s)</div></div>`;
+  }
+  h += `</div>`;
+  if(plan.flags.length) h += `<div class="card flags"><h3>🚩 Flags to the Area Manager</h3><ul>${plan.flags.map(f=>`<li>${esc(f)}</li>`).join("")}</ul></div>`;
+  h += `<p class="fresh">Read at ${esc(timeOf(live.sheet.fetchedAt))}: Team Sheet · Open-Meteo forecast (${esc(timeOf(live.forecast.fetchedAt))}) · Met Éireann warnings (${live.warnings.error?"unavailable":live.warnings.rawCount+" in force nationally"}) · thresholds from stored history ${esc(live.history.period)}.</p>`;
+  $("plan").innerHTML = h;
+}
+
+/* ---------- Sources & Method ---------- */
 function renderSources(live){
   const am = areaManagerAnswer(live.history);
-  let h = `<p><b>Team Sheet</b>: Google Sheet read live as CSV at each question.<br>
-  <b>River forecast</b>: Open-Meteo Flood API (Copernicus GloFAS), daily <code>river_discharge</code>, today + 2 days, Europe/Dublin dates.<br>
-  <b>History</b>: same source, ${esc(live.history.period)}, computed once and stored in <code>data/history_summary.json</code> (${esc(live.history.percentile_method)}).<br>
-  <b>Warnings</b>: Met Éireann <code>warning_IRELAND.json</code>; region codes (EIxx) are mapped to county names.</p>
-  <div class="tablewrap"><table><tr><th>Town</th><th>River</th><th>Model point (lat, lon)</th><th>Mean</th><th>95th</th><th>99th</th><th>Winter events</th><th>First 4</th><th>Last 4</th><th>Days ≥ 99th</th><th>Longest run</th></tr>`;
+  const top = am.ranking[0];
+  let h = `<div class="srcgrid">
+    <div class="card srccard"><h3>📄 Team Sheet</h3><p>Google Sheet read live as CSV at every question (11 columns, including rehearsal overrides and notes).</p><p class="lic">Fictional team data · read ${esc(timeOf(live.sheet.fetchedAt))}</p></div>
+    <div class="card srccard"><h3>🌊 River flow forecast</h3><p>Open-Meteo Flood API, daily <code>river_discharge</code> for today + 2 days at each town's checked model point.</p><p class="lic">Copernicus EMS GloFAS via Open-Meteo, CC BY 4.0 · read ${esc(timeOf(live.forecast.fetchedAt))}</p></div>
+    <div class="card srccard"><h3>📈 History (stored)</h3><p>${esc(live.history.period)}, computed once and stored in <code>data/history_summary.json</code> (${esc(live.history.percentile_method)}).</p><p class="lic">Same source and points as the forecast</p></div>
+    <div class="card srccard"><h3>⚠️ Weather warnings</h3><p>Met Éireann <code>warning_IRELAND.json</code>; county codes (EIxx) are mapped to county names. Only orange or red rain warnings within 48 hours raise a level.</p><p class="lic">Met Éireann, CC BY 4.0 · ${live.warnings.error?"unavailable":live.warnings.rawCount+" warning(s) in force"}</p></div>
+  </div>
+  <h2 class="sub-h">Thresholds and winter high-flow events</h2>
+  <div class="card tablecard"><div class="scroll"><table>
+    <tr><th>Town</th><th>River</th><th>Model point</th><th>Mean</th><th>95th</th><th>99th</th><th>Events</th><th>First 4</th><th>Last 4</th><th>Days ≥ 99th</th><th>Longest</th></tr>`;
   for(const r of am.ranking){
     const t = live.history.towns.find(x=>x.town===r.town);
-    h += `<tr><td>${esc(r.town)}</td><td>${esc(r.river)}</td><td>${t.lat_used.toFixed(3)}, ${t.lon_used.toFixed(3)}</td><td>${fmt(t.mean_m3s)}</td><td>${fmt(t.p95_m3s)}</td><td>${fmt(t.p99_m3s)}</td><td><b>${r.events}</b></td><td>${r.first4}</td><td>${r.last4}</td><td>${r.days}</td><td>${r.longest} d</td></tr>`;
+    h += `<tr class="${am.top.includes(r.town)?"top":""}"><td>${esc(r.town)}</td><td>${esc(r.river)}</td><td>${t.lat_used.toFixed(3)}, ${t.lon_used.toFixed(3)}</td><td>${fmt(t.mean_m3s)}</td><td>${fmt(t.p95_m3s)}</td><td>${fmt(t.p99_m3s)}</td><td><b>${r.events}</b></td><td>${r.first4}</td><td>${r.last4}</td><td>${r.days}</td><td>${r.longest} d</td></tr>`;
   }
-  h += `</table></div><p>${esc(am.method)}</p><p><b>Limits:</b> ${esc(am.limits)}</p>`;
+  h += `</table></div></div>
+  <h2 class="sub-h">The Area Manager's question</h2>
+  <div class="card srccard prose">
+    <p><b>${esc(am.top.join(", "))}</b> had the most winter high-flow events (${top.events}). Last four winters: ${top.last4}; first four: ${top.first4} (${top.last4>top.first4?"more":top.last4<top.first4?"fewer":"the same"} recently).</p>
+    <p>${esc(am.method)}</p>
+    <p><b>Limits:</b> ${esc(am.limits)}</p>
+  </div>
+  <h2 class="sub-h">How River Watch works</h2>
+  <div class="card srccard prose">
+    <p>1. At every question the page reads the Team Sheet, the river forecast and the warnings live.</p>
+    <p>2. Code applies the Flood Plan: levels from the 95th/99th percentiles, warning uplift, rehearsal overrides, notes, barrier sets and crew ranking.</p>
+    <p>3. The AI receives the finished plan and the Flood Plan text and explains it. It must not invent numbers and declines out-of-scope questions.</p>
+    <p>4. River Watch recommends; the Duty Officer decides by 16:00 and records the reason.</p>
+    <p class="lic">Out of scope: coastal and tidal flooding, road closures, insurance and individual homes. Ask the council's area office.</p>
+  </div>`;
   $("sources").innerHTML = h;
 }
 
-function mdToHtml(md){
-  const lines = esc(md).split("\n"); let html="", inList=false, table=[];
-  const inline = s => s.replace(/\*\*(.+?)\*\*/g,"<b>$1</b>").replace(/`(.+?)`/g,"<code>$1</code>");
-  const flushTable = ()=>{ if(!table.length) return; const rows=table.filter(r=>!/^\s*\|?\s*:?-{2,}/.test(r));
-    html += "<div class='tablewrap'><table>"+rows.map((r,i)=>"<tr>"+r.replace(/^\s*\||\|\s*$/g,"").split("|").map(c=>i?`<td>${inline(c.trim())}</td>`:`<th>${inline(c.trim())}</th>`).join("")+"</tr>").join("")+"</table></div>"; table=[]; };
-  for(const l of lines){
-    if(/^\s*\|.*\|\s*$/.test(l)){ if(inList){html+="</ul>";inList=false;} table.push(l); continue; } else flushTable();
-    if(/^\s*[-*] /.test(l)){ if(!inList){html+="<ul>";inList=true;} html+=`<li>${inline(l.replace(/^\s*[-*] /,""))}</li>`; continue; }
-    if(inList){ html+="</ul>"; inList=false; }
-    if(/^#{1,4} /.test(l)) html+=`<p><b>${inline(l.replace(/^#+ /,""))}</b></p>`;
-    else if(l.trim()) html+=`<p>${inline(l)}</p>`;
-  }
-  flushTable(); if(inList) html+="</ul>"; return html;
+/* ---------- Load live data (no AI) ---------- */
+async function refreshPlan(){
+  setStatus("loading","Reading live data…"); $("planOnly").disabled = true;
+  try{
+    const live = await gatherLive();
+    const plan = computePlan(live);
+    renderPlan(live, plan); renderSources(live);
+    if(live.warnings.error) setStatus("warn","Warnings feed down");
+    else if(plan.usesRehearsal) setStatus("rehearsal","Rehearsal · "+timeOf(live.sheet.fetchedAt));
+    else setStatus("live","Live · "+timeOf(live.sheet.fetchedAt));
+    return {live, plan};
+  }catch(e){
+    setStatus("error","Data error");
+    $("plan").innerHTML = `<div class="banner error">⚠️ <span><b>Could not load live data:</b> ${esc(e.message)}</span></div>`;
+    throw e;
+  }finally{ $("planOnly").disabled = false; }
 }
+$("planOnly").onclick = ()=>refreshPlan().catch(()=>{});
 
+/* ---------- The AI system prompt (unchanged) ---------- */
 const FLOOD_PLAN = `THE FLOOD PLAN (fictional, version 2026/27)
 1 Who decides: the Duty Officer decides each afternoon by 16:00 the level for each town for tonight. River Watch recommends; it never sends a crew.
 2 Numbers: forecast peak = highest daily flow forecast for today and the next two days, for the town's own river at the town. Thresholds = the town's own 95th and 99th percentiles of daily flow over ten full years.
@@ -515,30 +1028,61 @@ ${whatIfPlan?`WHAT_IF_PLAN (hypothetical scenario requested in the question, NOT
 AREA_MANAGER: ${JSON.stringify(areaManagerAnswer(live.history))}`;
 }
 
-function addMsg(html, cls){ const d=document.createElement("div"); d.className="msg "+(cls||""); d.innerHTML=html; $("chat").prepend(d); return d; }
-function setBusy(b,msg){ ["ask","planOnly"].forEach(id=>$(id).disabled=b); $("status").textContent=msg||""; }
-
-async function refreshPlan(){
-  setBusy(true,"Reading the Sheet, river forecast and Met Éireann warnings…");
-  try{
-    const live = await gatherLive();
-    const plan = computePlan(live);
-    renderPlan(live, plan); renderSources(live);
-    setBusy(false,"Live data loaded "+new Date().toLocaleTimeString());
-    return {live, plan};
-  }catch(e){ setBusy(false); $("status").innerHTML=`<span class="err">Could not load data: ${esc(e.message)}</span>`; throw e; }
+/* ---------- Chat UI ---------- */
+const BOT_AVATAR = `<div class="avatar" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M2 9c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/><path d="M2 15c2.5 0 2.5-2 5-2s2.5 2 5 2 2.5-2 5-2 2.5 2 5 2"/></svg></div>`;
+function scrollThread(){ const t=$("thread"); requestAnimationFrame(()=>{ t.scrollTop = t.scrollHeight; }); }
+function addUser(q){
+  const d=document.createElement("div"); d.className="msg user"; d.innerHTML=`<div class="bubble">${esc(q)}</div>`;
+  $("threadInner").appendChild(d); scrollThread();
+}
+function addTyping(text){
+  const d=document.createElement("div"); d.className="msg bot";
+  d.innerHTML=`${BOT_AVATAR}<div class="bubble" style="width:auto"><div class="typing"><span class="dots"><i></i><i></i><i></i></span><span class="t"></span></div></div>`;
+  d.querySelector(".t").textContent=text; $("threadInner").appendChild(d); scrollThread();
+  return { setText: s=>{ d.querySelector(".t").textContent=s; }, remove: ()=>d.remove() };
+}
+function addBot(html, meta, working, isError){
+  const d=document.createElement("div"); d.className="msg bot"+(isError?" error":"");
+  d.innerHTML=`${BOT_AVATAR}<div class="bubble"><div class="md">${html}</div>${working||""}${meta?`<div class="bubble-meta">${meta}</div>`:""}</div>`;
+  $("threadInner").appendChild(d); scrollThread();
+}
+function buildWorking(live, plan, isWhatIf){
+  const rows = plan.towns.map(t=>`<tr><td><b>${esc(t.town)}</b></td><td>${badge(t.levelName,true)}</td>
+    <td>${fmt(t.peak)} ${peakTag(t,plan)}</td><td>${fmt(t.p95)} / ${fmt(t.p99)}</td>
+    <td>${t.raisingWarnings.length?t.raisingWarnings.map(w=>esc(w.level)).join(", "):"none"}</td><td>${t.crew?esc(t.crew):t.flag?"🚩 flagged":"-"}</td></tr>`).join("");
+  return `<details class="working"><summary><svg class="chev" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>Show working${isWhatIf?" (what-if scenario)":""}</summary>
+    <div class="working-body">
+      ${isWhatIf?`<p style="margin:0 0 6px"><span class="tag whatif">What-if</span> Hypothetical values from your question; not tonight's live plan.</p>`:""}
+      ${plan.usesRehearsal?`<p style="margin:0 0 6px"><span class="tag rehearsal">Rehearsal</span> Sheet override values in use.</p>`:""}
+      <div class="scroll"><table><tr><th>Town</th><th>Level</th><th>Peak m³/s</th><th>95th / 99th</th><th>Warning</th><th>Crew</th></tr>${rows}</table></div>
+      ${plan.flags.length?`<p style="margin:8px 0 0"><b>Flags:</b> ${esc(plan.flags.join("; "))}</p>`:""}
+      <p style="margin:8px 0 0">Sources: Team Sheet ${esc(timeOf(live.sheet.fetchedAt))} · Open-Meteo forecast ${esc(timeOf(live.forecast.fetchedAt))} · Met Éireann ${live.warnings.error?"unavailable":esc(timeOf(live.warnings.fetchedAt))} · thresholds ${esc(live.history.period)}.</p>
+    </div></details>`;
 }
 
+let busy = false;
+function setBusy(b){ busy=b; $("ask").disabled = b; document.querySelectorAll(".chip").forEach(c=>c.disabled=b); }
+
 async function ask(q){
-  q = (q||"").trim(); if(!q) return;
+  q = (q||"").trim(); if(!q || busy) return;
+  showTab("chat");
   const prov = PROVIDERS[provider()], key = load(keyStore(provider()));
-  addMsg(`<b>You:</b> ${esc(q)}`,"user");
-  let ctx; try{ ctx = await refreshPlan(); }catch(e){ addMsg(`<span class="err">Live data could not be read, so no answer was given: ${esc(e.message)}</span>`); return; }
+  addUser(q); $("question").value=""; autoGrow();
+  setBusy(true);
+  const typing = addTyping("Reading the Sheet, river forecast and warnings…");
+  let ctx;
+  try{ ctx = await refreshPlan(); }
+  catch(e){ typing.remove(); addBot(`<p><b>Live data could not be read, so no answer was given.</b></p><p>${esc(e.message)}</p>`, "", "", true); setBusy(false); return; }
   const wi = parseWhatIf(q, ctx.live.history);
   let wiPlan = null;
-  if(wi){ wiPlan = computePlan({...ctx.live, whatIf:wi}); renderPlan(ctx.live, wiPlan); }
-  if(!key && !prov.noKey){ addMsg(`<span class="err">No ${esc(prov.name)} key saved: paste one in Settings to get an AI answer.</span> The plan table below has been recomputed from live data.`); return; }
-  setBusy(true,"Asking the AI to explain the computed plan…");
+  if(wi) wiPlan = computePlan({...ctx.live, whatIf:wi});
+  const working = buildWorking(ctx.live, wiPlan||ctx.plan, !!wiPlan);
+  if(!key && !prov.noKey){
+    typing.remove();
+    addBot(`<p><b>No ${esc(prov.name)} key saved.</b> Open Settings (⚙) to paste one, or choose the River Watch server.</p><p>The plan has been recomputed from live data: see <b>Tonight's Plan</b>.</p>`, "", working, true);
+    setBusy(false); return;
+  }
+  typing.setText("Explaining the computed plan…");
   const model = $("model").value;
   const messages = [{role:"system", content: systemPrompt(ctx.live, ctx.plan, wiPlan)}, ...chatHistory.slice(-4), {role:"user", content:q}];
   try{
@@ -553,15 +1097,25 @@ async function ask(q){
     chatHistory.push({role:"user",content:q},{role:"assistant",content:ans});
     const u = j.usage||{}; const usage = JSON.parse(load(COUNT_STORE)||'{"questions":0,"in":0,"out":0}');
     usage.questions++; usage.in += u.prompt_tokens||0; usage.out += u.completion_tokens||0; store(COUNT_STORE, JSON.stringify(usage));
-    addMsg(`<b>River Watch</b> <span class="muted">(${esc(j.model_used||j.model||model)} via ${esc(prov.name)})</span>${mdToHtml(ans)}<p class="muted">Tokens this answer: ${u.prompt_tokens||"?"} in / ${u.completion_tokens||"?"} out · Questions sent from this browser: ${usage.questions} (${usage.in} in / ${usage.out} out tokens). AI can make mistakes; a person makes the final decision.</p>`);
-    setBusy(false,"Answered "+new Date().toLocaleTimeString());
-  }catch(e){ setBusy(false); addMsg(`<span class="err">AI unavailable: ${esc(e.message)}</span> The computed plan table below is still valid.`); }
+    typing.remove();
+    addBot(mdToHtml(ans),
+      `<span>${esc(j.model_used||j.model||model)} · ${esc(prov.name.replace(/ \(.*\)$/,""))}</span><span>${u.prompt_tokens||"?"} in / ${u.completion_tokens||"?"} out tokens</span><span class="ai-note">AI can make mistakes; a person makes the final decision.</span>`,
+      working);
+  }catch(e){
+    typing.remove();
+    addBot(`<p><b>AI unavailable:</b> ${esc(e.message)}</p><p>The computed plan is still valid: open <b>Show working</b> below or the <b>Tonight's Plan</b> tab.</p>`, "", working, true);
+  }finally{ setBusy(false); $("question").focus(); }
 }
 
-$("ask").onclick = ()=>ask($("question").value);
-$("question").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); ask($("question").value);} });
-$("planOnly").onclick = ()=>refreshPlan().catch(()=>{});
-document.querySelectorAll(".quick button").forEach(b=>b.onclick=()=>{ $("question").value=b.dataset.q; ask(b.dataset.q); });
+/* ---------- Composer ---------- */
+function autoGrow(){ const t=$("question"); t.style.height="auto"; t.style.height=Math.min(t.scrollHeight,140)+"px"; }
+$("question").addEventListener("input", autoGrow);
+$("question").addEventListener("keydown", e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); ask($("question").value); } });
+$("composer").addEventListener("submit", e=>{ e.preventDefault(); ask($("question").value); });
+document.querySelectorAll(".chip").forEach(c=>c.onclick=()=>ask(c.dataset.q));
+
+/* ---------- Start: load the live plan straight away (no AI call) ---------- */
+refreshPlan().catch(()=>{});
 </script>
 </body>
 </html>
