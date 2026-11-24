@@ -5,11 +5,14 @@
 // If Gemini is busy (503/429) or a model is retired (404), it retries and falls back to another Gemini model.
 
 const ALLOWED_ORIGINS = ["https://benjaminmunashe-glitch.github.io"]; // only River Watch's page may use it
-const DEFAULT_MODEL = "gemini-3.8-flash";
+const DEFAULT_MODEL = "gemini-3.5-flash";
+// Tested 24 Nov 2026: 3.5-flash answered in ~2 s; 3.7/3.8-flash were overloaded. Tried in this order after the requested model.
+const PREFERRED = ["gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-latest", "gemini-2.5-flash"];
+const CALL_TIMEOUT_MS = 25000; // give up on a stuck model and try the next one
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const CHAT_URL = GEMINI_BASE + "/openai/chat/completions";
 const MAX_BODY_CHARS = 60000;   // stops very large (costly) requests
-const MAX_ATTEMPTS = 4;         // total model calls per question
+const MAX_ATTEMPTS = 3;         // total model calls per question (3 x 25 s stays under Cloudflare's ~100 s limit)
 
 let cachedModels = null;        // list of chat models this key can use (cached per Worker instance)
 
@@ -31,7 +34,7 @@ function fallbackOrder(requested, available) {
   const byNewest = [...available].sort((a, b) => ver(b) - ver(a));
   const flash = byNewest.filter(n => /flash/.test(n) && !/lite/.test(n));
   const lite = byNewest.filter(n => /flash-lite/.test(n));
-  return [...new Set([requested, ...flash, ...lite, ...byNewest])];
+  return [...new Set([requested, ...PREFERRED.filter(m => available.includes(m)), ...flash, ...lite, ...byNewest])];
 }
 
 export default {
@@ -72,14 +75,21 @@ export default {
     for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       if (attempt === 1) order = fallbackOrder(requested, await listModels(env.GEMINI_API_KEY));
       // attempt 0: requested; attempt 1: requested again (busy) or next model; later: next models
-      const model = attempt === 1 && last && (last.status === 503 || last.status === 429) ? requested
+      const model = attempt === 1 && last && last.status === 429 ? requested
                   : order.find(m => !tried.includes(m)) || requested;
       if (attempt > 0) await new Promise(r => setTimeout(r, 1200));
-      const r = await fetch(CHAT_URL, {
+      let r;
+      try {
+        r = await fetch(CHAT_URL, { signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": "Bearer " + env.GEMINI_API_KEY },
         body: JSON.stringify({ model, messages, temperature: 0.1, max_tokens: 4000 })
       });
+      } catch (e) {
+        if (!tried.includes(model)) tried.push(model);
+        last = { status: 504, text: JSON.stringify({ error: { message: model + " did not answer within " + CALL_TIMEOUT_MS / 1000 + " s" } }) };
+        continue;
+      }
       const text = await r.text();
       if (!tried.includes(model)) tried.push(model);
       if (r.ok) {
@@ -87,7 +97,7 @@ export default {
         catch { return new Response(text, { status: 200, headers: { ...cors, "Content-Type": "application/json" } }); }
       }
       last = { status: r.status, text };
-      if (![404, 429, 500, 503].includes(r.status)) break; // e.g. bad key: no point retrying
+      if (![404, 429, 500, 503, 504].includes(r.status)) break; // e.g. bad key: no point retrying
     }
     let err;
     try { const j = JSON.parse(last.text); err = (Array.isArray(j) ? j[0] : j).error?.message; } catch { err = last.text.slice(0, 300); }
